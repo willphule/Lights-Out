@@ -357,8 +357,9 @@
     const ctx = canvas.getContext('2d');
     LO.Input.init(canvas);
     Save.load();
+    const host = canvas.parentElement;
     const fit = () => {
-      const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+      const s = Math.max(0.1, Math.min(host.clientWidth / W, host.clientHeight / H));
       canvas.style.width = Math.floor(W * s) + 'px';
       canvas.style.height = Math.floor(H * s) + 'px';
     };
