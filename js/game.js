@@ -296,7 +296,7 @@
       gd.susp = 1; gd.aimT = 0; gd.lostT = 0;
       if (gd.isTarget) { gd.state = 'flee'; gd.t = 5; gd.callT = 0; gd.say('Intruder!'); }
       else { gd.state = 'alert'; gd.say(LO.pick(['There!', 'Intruder!', 'Got you!', 'Freeze!'])); }
-      LO.Sfx.play('alert');
+      LO.Sfx.play('alert'); LO.Input.rumble(0.35, 0.2, 160);
       this.raiseAlarm(gd);
     }
 
@@ -331,6 +331,7 @@
       const p = this.player;
       this.tracers.push({ x0: gd.cx + gd.dir * 10, y0: gd.y + 18, x1: p.cx, y1: p.cy, t: 0.3 });
       this.shake = 10;
+      LO.Input.rumble(1, 1, 450);
       this.fail('A guard shot you.');
     }
 
@@ -363,7 +364,7 @@
       if (a.possessed) this.release();
       a.ko = true; a.state = 'ko';
       this.setLying(a);
-      LO.Sfx.play('thud');
+      LO.Sfx.play('thud'); LO.Input.rumble(0.5, 0.3, 140);
       this.noise(a.cx, a.cy, 2.2 * TS, 'thud');
       if (a.isTarget) this.neutralize(method);
       else this.stats.kos++;
@@ -402,6 +403,7 @@
       for (const l of this.lamps) if (l.circuit && !l.broken) l.on = false;
       this.zapT = 0.9;
       this.shake = 6;
+      LO.Input.rumble(0.5, 0.9, 380);
       LO.Sfx.play('zap');
       for (let i = 0; i < 20; i++) this.spark(f.x + f.w / 2, f.y + f.h / 2, '#9be7ff');
       this.noise(f.x + f.w / 2, f.y + f.h / 2, 10 * TS, 'zap');
@@ -412,7 +414,7 @@
     breakLamp(l) {
       l.on = false; l.broken = true;
       this.stats.lampsShot++;
-      LO.Sfx.play('glass');
+      LO.Sfx.play('glass'); LO.Input.rumble(0.1, 0.35, 90);
       for (let i = 0; i < 14; i++) this.spark(l.x, l.y, '#ffe9a8');
       this.noise(l.x, l.y + 40, 7 * TS, 'glass');
     }
@@ -438,7 +440,7 @@
     possessTarget() {
       const cands = this.possessCandidates();
       if (!cands.length) return null;
-      const m = this.mouseWorld();
+      const m = this.aimWorld();
       let best = null, bd = Infinity;
       for (const a of cands) { const d = LO.dist(m.x, m.y, a.cx, a.cy); if (d < bd) { bd = d; best = a; } }
       if (bd > 160) {
@@ -467,7 +469,7 @@
       p.vx = 0;
       if (p.crouch === false && p.onGround) { /* sink into a trance */ }
       this.stats.possessions++;
-      LO.Sfx.play('possess');
+      LO.Sfx.play('possess'); LO.Input.rumble(0.15, 0.5, 220);
       for (let i = 0; i < 16; i++) this.spark(host.cx, host.cy, '#c9a0ff');
     }
 
@@ -653,6 +655,52 @@
     // ------------------------------------------------------------ update
     mouseWorld() { return { x: LO.Input.mouse.x + this.cam.x, y: LO.Input.mouse.y + this.cam.y }; }
 
+    // Where the player is aiming: the mouse, or the right stick on a controller.
+    aimWorld() {
+      if (!LO.Input.usingPad) return this.mouseWorld();
+      const a = this.controlled;
+      return this.padAimPt || { x: a.cx + a.dir * 120, y: a.y + 8 };
+    }
+
+    // Right stick aims around the player. The reticle snaps gently onto
+    // lamps, ropes, fuse boxes and anyone you could possess.
+    updatePadAim(dt) {
+      const I = LO.Input;
+      if (!I.usingPad) { this.padAimPt = null; this.aimSnap = null; return; }
+      const a = this.controlled;
+      const ox = a.cx, oy = a.y + 12;
+      const mag = Math.min(1, Math.hypot(I.aim.x, I.aim.y));
+      if (mag > 0) {
+        this.padAimDir = { x: I.aim.x / Math.hypot(I.aim.x, I.aim.y), y: I.aim.y / Math.hypot(I.aim.x, I.aim.y) };
+        this.padAimDist = 70 + mag * 230;
+      } else if (!this.padAimDir) {
+        this.padAimDir = { x: a.dir, y: -0.15 }; this.padAimDist = 130;
+      } else {
+        // stick at rest: keep the angle but follow the way you face
+        this.padAimDir.x = Math.abs(this.padAimDir.x) * a.dir;
+      }
+      const rx = ox + this.padAimDir.x * this.padAimDist, ry = oy + this.padAimDir.y * this.padAimDist;
+      const pts = [];
+      if (a === this.player) {
+        for (const l of this.lamps) if (!l.broken) pts.push([l.x, l.y]);
+        for (const c of this.crates) if (c.state === 'hanging') pts.push([c.x + c.w / 2, (c.ropeTop + c.y) / 2]);
+        for (const f of this.fuses) if (f.state === 'ok') pts.push([f.x + f.w / 2, f.y + f.h / 2]);
+        for (const g of this.guards) if (g.functional && !g.isTarget) pts.push([g.cx, g.cy]);
+        for (const c of this.critters) if (!c.dead) pts.push([c.cx, c.cy]);
+      }
+      let best = null, bd = 56;
+      for (const [x, y] of pts) {
+        const d = LO.dist(x, y, rx, ry);
+        if (d < bd && this.level.los(ox, oy, x, y)) { bd = d; best = { x, y }; }
+      }
+      const tx = best ? best.x : rx, ty = best ? best.y : ry;
+      if (!this.padAimPt) this.padAimPt = { x: tx, y: ty };
+      const k = Math.min(1, dt * (best ? 20 : 30));
+      this.padAimPt.x += (tx - this.padAimPt.x) * k;
+      this.padAimPt.y += (ty - this.padAimPt.y) * k;
+      this.aimSnap = best;
+    }
+
     update(dt) {
       const I = LO.Input;
       if (this.state === 'failed') { this.failT += dt; this.updateFx(dt); return; }
@@ -684,8 +732,9 @@
           this.footsteps(p, ctl, dt);
           if (ctl.run && Math.abs(p.vx) > 160) p.suspiciousT = Math.max(p.suspiciousT, 0.3);
         }
-        if (I.mouse.pressed && !p.locker) this.shoot();
-        if ((I.mouse.rpressed || I.wasPressed('KeyF')) && !p.locker) this.throwBottle();
+        this.updatePadAim(dt);
+        if (I.action('shoot') && !p.locker) this.shoot();
+        if (I.action('throw') && !p.locker) this.throwBottle();
       } else {
         // player body sits in a trance while a host is driven
         p.vx = 0; p.climbing = false;
@@ -695,24 +744,25 @@
         if (h.kind === 'guard') h.state = 'possessed';
         this.energy -= dt;
         if (this.energy <= 0) { this.energy = 0; this.release(); this.float(p.cx, p.y - 20, 'Link broken', '#c9a0ff'); }
-        if (I.mouse.pressed) this.float(h.cx, h.y - 16, 'Can\'t shoot while possessing', '#aaa', 1);
+        this.updatePadAim(dt);
+        if (I.action('shoot')) this.float(h.cx, h.y - 16, 'Can\'t shoot while possessing', '#aaa', 1);
       }
       if (this.controlled === p) this.energy = Math.min(this.maxEnergy, this.energy + dt * 0.6);
-      if (I.wasPressed('KeyQ')) { if (this.controlled !== p) this.release(); else this.tryPossess(); }
+      if (I.action('possess')) { if (this.controlled !== p) this.release(); else this.tryPossess(); }
 
       // interactions
       const inter = this.findInteraction();
       this.interaction = inter;
       if (inter && !inter.disabled) {
         if (inter.hold) {
-          if (I.isDown('KeyE')) {
+          if (I.held('interact')) {
             if (this.holdKey !== inter.key) { this.holdKey = inter.key; this.holdT = 0; LO.Sfx.play('unlock'); }
             this.holdT += dt;
             p.suspiciousT = Math.max(p.suspiciousT, 0.3);
             if (this.holdT >= inter.hold) { inter.act(); this.holdT = 0; this.holdKey = null; }
           } else { this.holdT = 0; this.holdKey = null; }
-        } else if (I.wasPressed('KeyE')) inter.act();
-      } else { this.holdT = 0; this.holdKey = null; if (inter && I.wasPressed('KeyE')) LO.Sfx.play('deny'); }
+        } else if (I.action('interact')) inter.act();
+      } else { this.holdT = 0; this.holdKey = null; if (inter && I.action('interact')) LO.Sfx.play('deny'); }
 
       // light on the player
       this.playerLight = p.hidden ? 0 : Math.max(this.lightAt(p.cx, p.y + 6), this.lightAt(p.cx, p.cy));
@@ -757,7 +807,7 @@
     shoot() {
       const p = this.player;
       if (this.ammo <= 0) { this.float(p.cx, p.y - 16, 'Out of pellets', '#aaa', 1); LO.Sfx.play('deny'); return; }
-      const m = this.mouseWorld();
+      const m = this.aimWorld();
       const sx = p.cx + p.dir * 4, sy = p.y + 14;
       const a = Math.atan2(m.y - sy, m.x - sx);
       p.dir = Math.cos(a) < 0 ? -1 : 1;
@@ -771,7 +821,7 @@
     throwBottle() {
       const p = this.player;
       if (this.bottles <= 0) { this.float(p.cx, p.y - 16, 'No bottles', '#aaa', 1); LO.Sfx.play('deny'); return; }
-      const m = this.mouseWorld();
+      const m = this.aimWorld();
       const sx = p.cx, sy = p.y + 10;
       const dx = m.x - sx, dy = m.y - sy;
       const d = Math.max(1, Math.hypot(dx, dy));
@@ -853,7 +903,7 @@
           if (this.level.tile(tx, ty) === '#' || this.level.isPlatformTop(tx, ty)) landed = true;
         if (landed) {
           c.y = ty * TS - c.h; c.state = 'landed';
-          LO.Sfx.play('crash'); this.shake = 12;
+          LO.Sfx.play('crash'); this.shake = 12; LO.Input.rumble(0.9, 0.5, 320);
           for (let i = 0; i < 18; i++) this.spark(c.x + c.w / 2, c.y + c.h, '#b89b72');
           this.noise(c.x + c.w / 2, c.y + c.h - 8, 9 * TS, 'crash');
         } else c.y = ny;
@@ -909,9 +959,11 @@
     clampCamY(y) { const m = this.level.ph - LO.VIEW_H; return m < 0 ? m / 2 : LO.clamp(y, 0, m); }
     updateCamera(dt) {
       const a = this.controlled;
-      const m = LO.Input.mouse;
-      const tx = a.cx - LO.VIEW_W / 2 + (m.x - LO.VIEW_W / 2) * 0.18;
-      const ty = a.cy - LO.VIEW_H / 2 + (m.y - LO.VIEW_H / 2) * 0.12;
+      let lx, ly;
+      if (LO.Input.usingPad) { const m = this.aimWorld(); lx = (m.x - a.cx) * 0.3; ly = (m.y - a.cy) * 0.2; }
+      else { const m = LO.Input.mouse; lx = (m.x - LO.VIEW_W / 2) * 0.18; ly = (m.y - LO.VIEW_H / 2) * 0.12; }
+      const tx = a.cx - LO.VIEW_W / 2 + lx;
+      const ty = a.cy - LO.VIEW_H / 2 + ly;
       const k = Math.min(1, dt * 6);
       this.cam.x = this.clampCamX(LO.lerp(this.cam.x, tx, k));
       this.cam.y = this.clampCamY(LO.lerp(this.cam.y, ty, k));
@@ -1208,9 +1260,9 @@
         ctx.setLineDash([]);
         ctx.strokeStyle = 'rgba(201,160,255,0.8)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.ellipse(h.cx, h.y - 6, 9, 3, 0, 0, Math.PI * 2); ctx.stroke();
-      } else if (LO.Input.isDown('KeyQ') === false) {
-        // show who Q would grab when the mouse hovers near them
-        const m = this.mouseWorld();
+      } else {
+        // show who possession would grab when you aim near them
+        const m = this.aimWorld();
         for (const a of this.possessCandidates()) {
           if (LO.dist(m.x, m.y, a.cx, a.cy) < 40) {
             ctx.strokeStyle = 'rgba(201,160,255,0.6)'; ctx.lineWidth = 1;
@@ -1291,7 +1343,12 @@
       ctx.globalAlpha = 1;
       // aim reticle
       if (this.controlled === p && this.state === 'play') {
-        const m = this.mouseWorld();
+        const m = this.aimWorld();
+        if (this.aimSnap) {
+          ctx.strokeStyle = 'rgba(255,233,168,0.55)'; ctx.lineWidth = 1.5;
+          const r = 13 + Math.sin(this.time * 8);
+          for (let i = 0; i < 4; i++) { const a0 = i * Math.PI / 2 + Math.PI / 4; ctx.beginPath(); ctx.arc(m.x, m.y, r, a0 - 0.35, a0 + 0.35); ctx.stroke(); }
+        }
         ctx.strokeStyle = this.ammo > 0 ? 'rgba(255,233,168,0.8)' : 'rgba(150,150,150,0.6)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(m.x, m.y, 7, 0, Math.PI * 2);
         ctx.moveTo(m.x - 11, m.y); ctx.lineTo(m.x - 4, m.y); ctx.moveTo(m.x + 4, m.y); ctx.lineTo(m.x + 11, m.y);

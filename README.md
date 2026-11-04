@@ -38,6 +38,25 @@ URL options: `?level=2` jumps straight into a mission, and `?unlock` unlocks eve
 | H | Controls overlay |
 | M | Mute |
 
+### Controller
+
+Plug in any standard controller (Xbox, PlayStation, Switch Pro) and press a button. Prompts switch to controller buttons, and switch back as soon as you touch the keyboard or mouse.
+
+| Button | Action |
+| --- | --- |
+| Left stick / D-pad | Move, climb ladders. Push down to crouch |
+| A | Jump (down + A drops through a platform) |
+| X | Interact. Hold to free a worker |
+| Y | Possess the guard or rat you're aiming at. Y again to return |
+| Right stick | Aim. The reticle snaps onto nearby lamps, ropes, fuse boxes and people |
+| RT / LT | Shoot / throw a bottle |
+| LB or click the left stick | Run |
+| Start | Pause (restart is in the pause menu) |
+| Back | Controls screen |
+| A / B in menus | Select / go back |
+
+Controllers that support it vibrate on takedowns, crashes, power surges and getting shot.
+
 ## How stealth works
 
 - The **visibility meter** shows how much light is on you. Crouching makes you harder to spot. Inside vents and lockers you can't be seen at all.

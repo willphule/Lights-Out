@@ -27,6 +27,7 @@ window.LO = window.LO || {};
         if (block.has(e.code)) e.preventDefault();
         if (!this.down.has(e.code)) this.pressed.add(e.code);
         this.down.add(e.code);
+        this.usingPad = false;
         LO.Sfx.unlock();
       });
       window.addEventListener('keyup', (e) => this.down.delete(e.code));
@@ -36,9 +37,13 @@ window.LO = window.LO || {};
         this.mouse.x = ((e.clientX - r.left) * canvas.width) / r.width;
         this.mouse.y = ((e.clientY - r.top) * canvas.height) / r.height;
       };
-      canvas.addEventListener('mousemove', (e) => { pos(e); this.mouse.moved = true; });
+      canvas.addEventListener('mousemove', (e) => {
+        pos(e); this.mouse.moved = true;
+        if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) this.usingPad = false;
+      });
       canvas.addEventListener('mousedown', (e) => {
         pos(e);
+        this.usingPad = false;
         LO.Sfx.unlock();
         if (e.button === 2) this.mouse.rpressed = true;
         else { this.mouse.pressed = true; this.mouse.down = true; }
@@ -51,20 +56,102 @@ window.LO = window.LO || {};
     wasPressed(...codes) { return codes.some((c) => this.pressed.has(c)); },
     endFrame() {
       this.pressed.clear();
+      this.padPressed.clear();
       this.mouse.pressed = false;
       this.mouse.rpressed = false;
       this.mouse.moved = false;
     },
+
+    // ---------------------------------------------------------- controller
+    // Standard mapping: 0 A, 1 B, 2 X, 3 Y, 4 LB, 5 RB, 6 LT, 7 RT, 8 Back,
+    // 9 Start, 10 L3, 11 R3, 12-15 D-pad up/down/left/right.
+    // 100-103 are the left stick pushed up/down/left/right, so menus can use it.
+    usingPad: false,
+    padDown: new Set(),
+    padPressed: new Set(),
+    stick: { x: 0, y: 0 },
+    aim: { x: 0, y: 0 },
+    pollPad() {
+      let pad = null;
+      try {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (const p of pads) if (p && p.connected) { pad = p; break; }
+      } catch (e) { pad = null; }
+      this.pad = pad;
+      const now = new Set();
+      if (pad) {
+        const dz = (v) => (Math.abs(v) < 0.22 ? 0 : v);
+        this.stick.x = dz(pad.axes[0] || 0); this.stick.y = dz(pad.axes[1] || 0);
+        this.aim.x = dz(pad.axes[2] || 0); this.aim.y = dz(pad.axes[3] || 0);
+        pad.buttons.forEach((b, i) => { if (b && (b.pressed || b.value > 0.5)) now.add(i); });
+        if (this.stick.y < -0.6) now.add(100);
+        if (this.stick.y > 0.6) now.add(101);
+        if (this.stick.x < -0.6) now.add(102);
+        if (this.stick.x > 0.6) now.add(103);
+        if (now.size || Math.hypot(this.stick.x, this.stick.y) > 0.5 || Math.hypot(this.aim.x, this.aim.y) > 0.5) {
+          if (!this.usingPad) LO.Sfx.unlock();
+          this.usingPad = true;
+        }
+      } else {
+        this.stick.x = this.stick.y = this.aim.x = this.aim.y = 0;
+      }
+      for (const b of now) if (!this.padDown.has(b)) this.padPressed.add(b);
+      this.padDown = now;
+    },
+    padIsDown(...b) { return b.some((i) => this.padDown.has(i)); },
+    padWasPressed(...b) { return b.some((i) => this.padPressed.has(i)); },
+    rumble(strong, weak, ms) {
+      const a = this.pad && this.usingPad && this.pad.vibrationActuator;
+      if (!a || !a.playEffect) return;
+      try { a.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }).catch(() => {}); } catch (e) { /* not supported */ }
+    },
+
+    // Named actions, each fed by keys, mouse buttons and controller buttons.
+    ACTIONS: {
+      interact: { keys: ['KeyE'], pad: [2] },
+      possess: { keys: ['KeyQ'], pad: [3] },
+      shoot: { mouse: 'pressed', pad: [7] },
+      throw: { keys: ['KeyF'], mouse: 'rpressed', pad: [6] },
+      pause: { keys: ['Escape', 'KeyP'], pad: [9] },
+      help: { keys: ['KeyH'], pad: [8] },
+      restart: { keys: ['KeyR'], pad: [] },
+      mute: { keys: ['KeyM'], pad: [] },
+      confirm: { keys: ['Enter', 'Space'], pad: [0] },
+      back: { keys: ['Escape'], pad: [1] },
+      navUp: { keys: ['ArrowUp', 'KeyW'], pad: [12, 100] },
+      navDown: { keys: ['ArrowDown', 'KeyS', 'Tab'], pad: [13, 101] },
+    },
+    action(name) {
+      const a = this.ACTIONS[name];
+      return (a.keys && this.wasPressed(...a.keys)) || (a.mouse && this.mouse[a.mouse]) || this.padWasPressed(...a.pad);
+    },
+    held(name) {
+      const a = this.ACTIONS[name];
+      return (a.keys && this.isDown(...a.keys)) || (a.mouse === 'pressed' && this.mouse.down) || this.padIsDown(...a.pad);
+    },
+    anyPressed() { return this.pressed.size > 0 || this.mouse.pressed || this.padPressed.size > 0; },
+
+    // Button names for on-screen prompts, matching whatever was used last.
+    LABELS: {
+      interact: ['E', 'X'], possess: ['Q', 'Y'], shoot: ['left click', 'RT'], throw: ['right click or F', 'LT'],
+      move: ['A/D', 'the left stick'], jump: ['Space', 'A'], crouch: ['S', 'down on the left stick'],
+      climb: ['W/S', 'up/down on the left stick'], run: ['Shift', 'LB'], aim: ['the mouse', 'the right stick'],
+      pause: ['Esc', 'Start'], help: ['H', 'Back'], restart: ['R', 'Start → Restart'],
+    },
+    label(name) { const l = this.LABELS[name]; return l ? l[this.usingPad ? 1 : 0] : name; },
+    fill(text) { return text.replace(/\{(\w+)\}/g, (m, k) => this.label(k)); },
+
     // Movement intent shared by the player and possessed hosts.
     controls() {
+      const s = this.stick;
       return {
-        left: this.isDown('KeyA', 'ArrowLeft'),
-        right: this.isDown('KeyD', 'ArrowRight'),
-        up: this.isDown('KeyW', 'ArrowUp'),
-        down: this.isDown('KeyS', 'ArrowDown', 'ControlLeft'),
+        left: this.isDown('KeyA', 'ArrowLeft') || s.x < -0.35 || this.padIsDown(14),
+        right: this.isDown('KeyD', 'ArrowRight') || s.x > 0.35 || this.padIsDown(15),
+        up: this.isDown('KeyW', 'ArrowUp') || s.y < -0.5 || this.padIsDown(12),
+        down: this.isDown('KeyS', 'ArrowDown', 'ControlLeft') || s.y > 0.5 || this.padIsDown(13),
         upPressed: this.wasPressed('KeyW', 'ArrowUp'),
-        jump: this.wasPressed('Space'),
-        run: this.isDown('ShiftLeft', 'ShiftRight'),
+        jump: this.wasPressed('Space') || this.padWasPressed(0),
+        run: this.isDown('ShiftLeft', 'ShiftRight') || this.padIsDown(4, 10),
       };
     },
   });

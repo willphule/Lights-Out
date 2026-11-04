@@ -79,11 +79,11 @@
     const I = LO.Input;
     const n = App.buttons.length;
     if (!n) return null;
-    if (I.wasPressed('ArrowDown', 'KeyS', 'Tab')) { App.sel = (App.sel + 1) % n; LO.Sfx.play('click'); }
-    if (I.wasPressed('ArrowUp', 'KeyW')) { App.sel = (App.sel - 1 + n) % n; LO.Sfx.play('click'); }
+    if (I.action('navDown')) { App.sel = (App.sel + 1) % n; LO.Sfx.play('click'); }
+    if (I.action('navUp')) { App.sel = (App.sel - 1 + n) % n; LO.Sfx.play('click'); }
     App.sel = LO.clamp(App.sel, 0, n - 1);
     let chosen = null;
-    if (I.wasPressed('Enter', 'Space')) chosen = App.buttons[App.sel];
+    if (I.action('confirm')) chosen = App.buttons[App.sel];
     if (I.mouse.pressed) {
       const m = I.mouse;
       for (const b of App.buttons) if (m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h) chosen = b;
@@ -137,6 +137,8 @@
     button(ctx, 'play', 'PLAY', W / 2 - 110, 260, 220, 42);
     button(ctx, 'help', 'CONTROLS', W / 2 - 110, 312, 220, 42);
     button(ctx, 'mute', LO.Sfx.muted ? 'SOUND: OFF' : 'SOUND: ON', W / 2 - 110, 364, 220, 42);
+    ctx.textAlign = 'center'; ctx.font = '12px monospace'; ctx.fillStyle = '#7d8598';
+    ctx.fillText(LO.Input.pad ? 'Controller connected · A to select · B to go back' : 'Keyboard and mouse, or plug in a controller and press any button', W / 2, 440);
     const c = menuInput();
     if (c === 'play') { App.screen = 'select'; App.sel = Math.min(Save.data.unlocked, LO.LEVELS.length) - 1; }
     if (c === 'help') { App.showHelp = true; App.helpFrom = 'title'; }
@@ -169,7 +171,7 @@
     });
     button(ctx, 'back', 'BACK', W / 2 - 80, H - 66, 160, 38);
     const c = menuInput();
-    if (c === 'back' || LO.Input.wasPressed('Escape')) { App.screen = 'title'; App.sel = 0; }
+    if (c === 'back' || LO.Input.action('back')) { App.screen = 'title'; App.sel = 0; }
     else if (c && c.startsWith('lv')) { App.levelIndex = +c.slice(2); App.screen = 'briefing'; App.sel = 0; }
   }
 
@@ -202,19 +204,29 @@
     button(ctx, 'back', 'BACK', W - 300, H - 58, 180, 26, { font: '12px monospace' });
     const c = menuInput();
     if (c === 'go') startLevel(App.levelIndex);
-    if (c === 'back' || LO.Input.wasPressed('Escape')) { App.screen = 'select'; App.sel = App.levelIndex; }
+    if (c === 'back' || LO.Input.action('back')) { App.screen = 'select'; App.sel = App.levelIndex; }
   }
 
   function drawHelp(ctx) {
     ctx.fillStyle = 'rgba(4,5,10,0.88)'; ctx.fillRect(0, 0, W, H);
     title(ctx, 'CONTROLS', 70, 32);
-    const rows = [
+    const rows = LO.Input.usingPad ? [
+      ['Left stick / D-pad', 'Move, climb ladders'], ['A', 'Jump'], ['Down on the stick', 'Crouch: quieter, smaller, fits in vents'],
+      ['Down + A', 'Drop through a platform'], ['LB or click the stick', 'Run (loud)'],
+      ['Right stick', 'Aim (snaps onto lamps, ropes, fuse boxes and people)'],
+      ['RT', 'Shoot a pellet: break lights, cut ropes, hit fuse boxes'],
+      ['LT', 'Throw a bottle to make a distraction'],
+      ['X', 'Interact: takedown from behind, take uniform, free workers, levers, lockers, exit'],
+      ['Y', 'Possess the guard or rat you are aiming at. Y again to return'],
+      ['Start', 'Pause (restart from the pause menu)'], ['Back', 'This screen'], ['B', 'Back out of menus'],
+    ] : [
       ['A / D', 'Move'], ['Space (or W)', 'Jump'], ['S', 'Crouch: quieter, smaller, fits in vents'],
       ['S + Space', 'Drop through a platform'], ['W / S on a ladder', 'Climb'], ['Shift', 'Run (loud)'],
       ['Mouse + Left click', 'Shoot a pellet: break lights, cut ropes, hit fuse boxes'],
       ['Right click / F', 'Throw a bottle to make a distraction'],
       ['E', 'Interact: takedown from behind, take uniform, free workers, levers, lockers, exit'],
       ['Q', 'Possess a guard or rat near the mouse. Q again to return'],
+      ['H', 'This screen'],
       ['Esc / P', 'Pause'], ['R', 'Restart mission'], ['M', 'Mute'],
     ];
     rows.forEach(([k, v], i) => {
@@ -224,8 +236,8 @@
     });
     ctx.textAlign = 'center'; ctx.font = '13px monospace'; ctx.fillStyle = '#7d8598';
     ctx.fillText('Guards see what is lit. Their cones show where they are looking. Noise rings show what they can hear.', W / 2, H - 46);
-    ctx.fillText('Press any key to close', W / 2, H - 22);
-    if (LO.Input.pressed.size || LO.Input.mouse.pressed) { App.showHelp = false; LO.Input.pressed.clear(); LO.Input.mouse.pressed = false; }
+    ctx.fillText(LO.Input.usingPad ? 'Press any button to close' : 'Press any key to close', W / 2, H - 22);
+    if (LO.Input.anyPressed()) { App.showHelp = false; LO.Input.pressed.clear(); LO.Input.padPressed.clear(); LO.Input.mouse.pressed = false; }
   }
 
   function drawPause(ctx) {
@@ -238,7 +250,7 @@
     button(ctx, 'help', 'CONTROLS', W / 2 - 110, 300, 220, 40);
     button(ctx, 'quit', 'QUIT TO MISSIONS', W / 2 - 110, 350, 220, 40);
     const c = menuInput();
-    if (c === 'resume' || LO.Input.wasPressed('Escape', 'KeyP')) App.screen = 'play';
+    if (c === 'resume' || LO.Input.action('pause') || LO.Input.action('back')) App.screen = 'play';
     if (c === 'restart') startLevel(App.levelIndex);
     if (c === 'help') { App.showHelp = true; App.helpFrom = 'pause'; }
     if (c === 'quit') { App.screen = 'select'; App.sel = App.levelIndex; }
@@ -253,11 +265,11 @@
     ctx.textAlign = 'center'; ctx.font = '16px sans-serif'; ctx.fillStyle = '#ffb0a8';
     ctx.fillText(g.failReason, W / 2, 210);
     App.buttons = [];
-    button(ctx, 'retry', 'RETRY  [R]', W / 2 - 110, 260, 220, 40);
+    button(ctx, 'retry', LO.Input.usingPad ? 'RETRY' : 'RETRY  [R]', W / 2 - 110, 260, 220, 40);
     button(ctx, 'quit', 'MISSIONS', W / 2 - 110, 310, 220, 40);
     const c = menuInput();
     if (c === 'retry') startLevel(App.levelIndex);
-    if (c === 'quit' || LO.Input.wasPressed('Escape')) { App.screen = 'select'; App.sel = App.levelIndex; }
+    if (c === 'quit' || LO.Input.action('back')) { App.screen = 'select'; App.sel = App.levelIndex; }
   }
 
   function drawResults(ctx) {
@@ -324,7 +336,7 @@
     App.t += dt;
     const cur = App.screen === 'play' && !App.showHelp && App.game.state === 'play' ? 'none' : 'default';
     if (ctx.canvas.style.cursor !== cur) ctx.canvas.style.cursor = cur;
-    if (I.wasPressed('KeyM')) LO.Sfx.toggleMute();
+    if (I.action('mute')) LO.Sfx.toggleMute();
     if (App.showHelp) {
       if (App.helpFrom === 'pause' || App.screen === 'play') App.game.render(ctx);
       else backdrop(ctx, App.t);
@@ -339,9 +351,13 @@
       case 'results': App.resultsT += dt; drawResults(ctx); break;
       case 'play': {
         const g = App.game;
-        if (I.wasPressed('Escape', 'KeyP') && g.state === 'play') { App.screen = 'paused'; App.sel = 0; drawPause(ctx); break; }
-        if (I.wasPressed('KeyR')) { startLevel(App.levelIndex); break; }
-        if (I.wasPressed('KeyH') && g.state === 'play') { App.showHelp = true; App.helpFrom = 'play'; break; }
+        if (I.action('pause') && g.state === 'play') {
+          App.screen = 'paused'; App.sel = 0;
+          I.pressed.clear(); I.padPressed.clear(); // the same press must not also resume
+          drawPause(ctx); break;
+        }
+        if (I.action('restart')) { startLevel(App.levelIndex); break; }
+        if (I.action('help') && g.state === 'play') { App.showHelp = true; App.helpFrom = 'play'; break; }
         g.update(dt);
         g.render(ctx);
         if (g.state === 'failed') drawFailed(ctx);
@@ -367,7 +383,7 @@
     const lv = /[?&]level=(\d+)/.exec(location.search);
     if (lv) { Save.data.unlocked = LO.LEVELS.length; startLevel(LO.clamp(+lv[1] - 1, 0, LO.LEVELS.length - 1)); }
     let last = performance.now();
-    LO.step = (dt) => { frame(ctx, dt); LO.Input.endFrame(); };
+    LO.step = (dt) => { LO.Input.pollPad(); frame(ctx, dt); LO.Input.endFrame(); };
     const loop = (now) => {
       const dt = Math.min(1 / 30, (now - last) / 1000);
       last = now;

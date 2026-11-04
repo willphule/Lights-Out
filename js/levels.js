@@ -28,10 +28,10 @@
       ],
       tips: [
         'The orange lever is the crane release. It drops the crate hanging below. Time it right and it was just a workplace accident.',
-        'Press Q to possess a guard (point the mouse near them). Your body stays behind, defenseless. A possessed guard walks through security doors and can knock out anyone, even the Foreman.',
-        'A/D to move, Space to jump, S to crouch. Light exposes you. Keep the VISIBILITY meter low by sticking to the shadows.',
-        'W/S climbs ladders. Hold S to crouch-walk silently. Walking makes noise up close, and running (Shift) can be heard far away.',
-        'Click to shoot out lights. Sneak up behind a guard and press E for a takedown. A knocked-out guard\'s uniform gets you through security doors.',
+        'Press {possess} to possess a guard (aim near them with {aim}). Your body stays behind, defenseless. A possessed guard walks through security doors and can knock out anyone, even the Foreman.',
+        'Move with {move}, jump with {jump}, crouch with {crouch}. Light exposes you. Keep the VISIBILITY meter low by sticking to the shadows.',
+        'Climb ladders with {climb}. Crouch-walk ({crouch}) to move silently. Walking makes noise up close, and running ({run}) can be heard far away.',
+        'Shoot out lights with {shoot}. Sneak up behind a guard and press {interact} for a takedown. A knocked-out guard\'s uniform gets you through security doors.',
       ],
       map: [
         '########################################################',
@@ -70,10 +70,10 @@
         { key: 'takedown', name: 'From the Gallery', hint: 'The gallery grating lets you drop into the hall unseen.' },
       ],
       tips: [
-        'Rats fit through grates and between gate bars. Possess one (Q) to reach places you can\'t.',
-        'This fuse box powers the blue pump-hall lights. Overload it (E, or a well-placed pellet) and the hall goes dark for a while... and anyone standing in water gets a nasty shock.',
+        'Rats fit through grates and between gate bars. Possess one ({possess}) to reach places you can\'t.',
+        'This fuse box powers the blue pump-hall lights. Overload it ({interact}, or a well-placed pellet) and the hall goes dark for a while... and anyone standing in water gets a nasty shock.',
         'The gate is locked from the inside. Find another way in, or find someone small enough to slip between the bars.',
-        'Bottles (right-click or F) shatter loudly where they land. Use them to pull guards away from their posts.',
+        'Bottles ({throw}) shatter loudly where they land. Use them to pull guards away from their posts.',
       ],
       map: [
         '############################################################',

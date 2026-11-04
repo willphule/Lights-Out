@@ -195,7 +195,7 @@
     // prompt
     const inter = g.interaction;
     if (inter && g.state === 'play') {
-      const text = inter.disabled ? inter.label : `[E${inter.hold ? ' hold' : ''}] ${inter.label}`;
+      const text = inter.disabled ? inter.label : `[${LO.Input.label('interact')}${inter.hold ? ' hold' : ''}] ${inter.label}`;
       ctx.font = 'bold 13px monospace';
       const w = ctx.measureText(text).width + 28;
       panel(ctx, LO.VIEW_W / 2 - w / 2, LO.VIEW_H - 46, w, 28);
@@ -208,7 +208,7 @@
     for (const sgn of g.signs) {
       if (Math.abs(sgn.x + 8 - cur.cx) < 48 && Math.abs(sgn.y + 13 - cur.cy) < 48 && sgn.text) {
         ctx.font = '13px sans-serif';
-        const lines = LO.wrapText(ctx, sgn.text, 560);
+        const lines = LO.wrapText(ctx, LO.Input.fill(sgn.text), 560);
         const h = 18 + lines.length * 18;
         const y = LO.VIEW_H - 60 - h;
         panel(ctx, LO.VIEW_W / 2 - 300, y, 600, h);
@@ -221,10 +221,10 @@
     if (g.controlled !== p) {
       ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#c9a0ff';
       const who = g.controlled.kind === 'critter' ? 'a rat' : g.controlled.name.toLowerCase();
-      ctx.fillText(`POSSESSING ${who.toUpperCase()} — [Q] release · your body is defenseless`, LO.VIEW_W / 2, LO.VIEW_H - 58 - (inter ? 0 : -30));
+      ctx.fillText(`POSSESSING ${who.toUpperCase()} — [${LO.Input.label('possess')}] release · your body is defenseless`, LO.VIEW_W / 2, LO.VIEW_H - 58 - (inter ? 0 : -30));
     }
     ctx.textAlign = 'left';
     ctx.font = '10px monospace'; ctx.fillStyle = 'rgba(180,190,210,0.55)';
-    ctx.fillText('H: controls   Esc: pause   R: restart', 14, LO.VIEW_H - 10);
+    ctx.fillText(LO.Input.usingPad ? 'Back: controls   Start: pause' : 'H: controls   Esc: pause   R: restart', 14, LO.VIEW_H - 10);
   };
 })(window.LO);
