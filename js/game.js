@@ -3,6 +3,8 @@
 (function (LO) {
   const TS = LO.TS;
   const FL_R = 230, FL_HALF = 0.42; // guard flashlight reach and half-angle
+  const polyPath = (c, pts) => { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath(); };
+  const wedge = (c, x, y, r, a0, a1) => { c.beginPath(); c.moveTo(x, y); c.arc(x, y, r, a0, a1); c.closePath(); };
 
   const METHOD_NAMES = {
     accident: 'Accident',
@@ -36,10 +38,22 @@
       this.controlled = this.player;
       this.cam = { x: 0, y: 0 };
       this.snapCamera();
-      this.buildStatic();
+      LO.Scenery.build(this);
+      const th = this.theme;
+      for (const l of this.lamps) {
+        l.color = l.spot ? '235,242,255' : l.circuit ? th.circuit : th.lamp;
+        l.fl = 1; l.flash = 0; l.flickT = 2 + Math.random() * 20;
+        if (!l.spot) this.makeLampStamps(l);
+      }
+      for (const g of this.guards) g.look = g.isTarget ? (def.target && def.target.look) || {} : th.guard;
       this.lightCanvas = document.createElement('canvas');
       this.lightCanvas.width = LO.VIEW_W; this.lightCanvas.height = LO.VIEW_H;
       this.lctx = this.lightCanvas.getContext('2d');
+      this.worldCanvas = document.createElement('canvas');
+      this.worldCanvas.width = LO.VIEW_W; this.worldCanvas.height = LO.VIEW_H;
+      this.wctx = this.worldCanvas.getContext('2d');
+      this.hitStop = 0; this.slowT = 0; this.slowK = 1;
+      this.mood = { alert: 0, watched: 0, possess: 0, hidden: 0 };
       this.say(def.intro || '');
     }
 
@@ -64,7 +78,7 @@
           case 'L': case 'Y': case 'l': case 'y': {
             const small = m.ch === 'l' || m.ch === 'y';
             let top = m.y; while (top > 0 && !'#-'.includes(lvl.tile(m.x, top - 1))) top--;
-            this.lamps.push({ x: px + 16, y: py + 12, r: small ? 130 : (def.lampRadius || 200),
+            this.lamps.push({ x: px + 16, y: py + 12, r: small ? 130 : (def.lampRadius || 200), cone: small ? 1.3 : 1.15,
               on: true, broken: false, circuit: m.ch === 'Y' || m.ch === 'y', ceil: top * TS, poly: null });
             break;
           }
@@ -119,76 +133,6 @@
       g.patrolMin = a * TS + 14; g.patrolMax = (b + 1) * TS - 14;
     }
 
-    // Pre-render the walls and background once.
-    buildStatic() {
-      const lvl = this.level;
-      const c = document.createElement('canvas');
-      c.width = lvl.pw; c.height = lvl.ph;
-      const x = c.getContext('2d');
-      const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
-      for (let ty = 0; ty < lvl.h; ty++) for (let tx = 0; tx < lvl.w; tx++) {
-        const t = lvl.tile(tx, ty), px = tx * TS, py = ty * TS;
-        if (t === '#') continue;
-        // back wall: brick courses
-        x.fillStyle = this.def.bg || '#1a1e2c';
-        x.fillRect(px, py, TS, TS);
-        x.fillStyle = 'rgba(255,255,255,0.025)';
-        const off = ty % 2 ? 16 : 0;
-        x.fillRect(px, py + 15, TS, 1);
-        x.fillRect(px + off, py, 1, 15);
-        x.fillRect(px + (off + 16) % 32, py + 16, 1, 16);
-        if (hash(tx, ty) > 0.93) { x.fillStyle = 'rgba(0,0,0,0.18)'; x.fillRect(px + 4, py + 6, 18, 12); }
-        if (t === 'V') {
-          x.fillStyle = '#0c0e15'; x.fillRect(px, py, TS, TS);
-          x.fillStyle = '#20242f';
-          for (let i = 2; i < TS; i += 6) x.fillRect(px, py + i, TS, 2);
-          x.fillStyle = '#2d3240'; x.fillRect(px, py, TS, 2); x.fillRect(px, py + TS - 2, TS, 2);
-        }
-        if (t === '%') {
-          x.fillStyle = '#121520'; x.fillRect(px, py, TS, TS);
-          x.fillStyle = '#4b5266';
-          for (let i = 3; i < TS; i += 7) x.fillRect(px + i, py, 2, TS);
-          x.fillRect(px, py + 2, TS, 2); x.fillRect(px, py + TS - 4, TS, 2);
-        }
-        if (t === '-') {
-          x.fillStyle = '#5c4a38'; x.fillRect(px, py, TS, 6);
-          x.fillStyle = '#7a634b'; x.fillRect(px, py, TS, 2);
-          x.fillStyle = '#3a2e24'; x.fillRect(px + 4, py + 6, 3, 6); x.fillRect(px + 25, py + 6, 3, 6);
-        }
-        if (t === 'H') {
-          x.fillStyle = '#6d5c3e';
-          x.fillRect(px + 7, py, 3, TS); x.fillRect(px + 22, py, 3, TS);
-          for (let i = 4; i < TS; i += 9) x.fillRect(px + 7, py + i, 18, 3);
-        }
-        if (t === 'D') {
-          x.fillStyle = '#16202c'; x.fillRect(px + 4, py, 24, TS);
-          x.fillStyle = '#3e6c8e';
-          for (let i = 6; i < 28; i += 6) x.fillRect(px + i, py, 2, TS);
-          x.fillRect(px + 2, py, 3, TS); x.fillRect(px + 27, py, 3, TS);
-        }
-      }
-      // walls
-      for (let ty = 0; ty < lvl.h; ty++) for (let tx = 0; tx < lvl.w; tx++) {
-        if (lvl.tile(tx, ty) !== '#') continue;
-        const px = tx * TS, py = ty * TS;
-        x.fillStyle = this.def.wall || '#2a2f42';
-        x.fillRect(px, py, TS, TS);
-        x.fillStyle = 'rgba(0,0,0,0.18)';
-        if ((tx + ty) % 2) x.fillRect(px, py, TS, TS);
-        x.fillStyle = 'rgba(255,255,255,0.04)';
-        x.fillRect(px + 2, py + 2, TS - 4, 1);
-        const open = (dx, dy) => lvl.tile(tx + dx, ty + dy) !== '#';
-        x.fillStyle = this.def.edge || '#4a5270';
-        if (open(0, -1)) x.fillRect(px, py, TS, 4);
-        x.fillStyle = 'rgba(0,0,0,0.35)';
-        if (open(0, 1)) x.fillRect(px, py + TS - 3, TS, 3);
-        x.fillStyle = 'rgba(255,255,255,0.06)';
-        if (open(-1, 0)) x.fillRect(px, py, 2, TS);
-        if (open(1, 0)) x.fillRect(px + TS - 2, py, 2, TS);
-      }
-      this.staticCanvas = c;
-    }
-
     // ------------------------------------------------------------ messaging
     say(text, t = 3) { if (text) this.banner = { text, t, max: t }; }
     float(x, y, text, color = '#fff', t = 1.6) { this.floaters.push({ x, y, text, color, t, max: t }); }
@@ -226,7 +170,13 @@
           let da = Math.atan2(y - l.y, x - l.x) - l.ang;
           da = Math.atan2(Math.sin(da), Math.cos(da));
           if (Math.abs(da) < l.spot.half && lvl.los(l.x, l.y, x, y)) L += (1 - (d / l.r) ** 2) * 1.4;
-        } else if (lvl.los(l.x, l.y, x, y)) L += Math.pow(1 - d / l.r, 1.1) * 1.3;
+        } else {
+          let da = Math.atan2(y - l.y, x - l.x) - Math.PI / 2;
+          da = Math.abs(Math.atan2(Math.sin(da), Math.cos(da)));
+          let k = da <= l.cone ? 1 : da <= l.cone + 0.32 ? 1 - ((da - l.cone) / 0.32) * 0.75 : 0;
+          if (d < 56) k = Math.max(k, 0.85 * (1 - d / 56));
+          if (k > 0 && lvl.los(l.x, l.y, x, y)) L += k * Math.pow(1 - d / l.r, 1.1) * 1.3;
+        }
       }
       for (const g of this.guards) {
         if (!g.flashlight || !g.functional || g.possessed) continue;
@@ -318,6 +268,8 @@
       if (gd.isTarget) { gd.state = 'flee'; gd.t = 5; gd.callT = 0; gd.say('Intruder!'); }
       else { gd.state = 'alert'; gd.say(LO.pick(['There!', 'Intruder!', 'Got you!', 'Freeze!'])); }
       LO.Sfx.play('alert'); LO.Input.rumble(0.35, 0.2, 160);
+      if (this.mood.alert < 0.3) { LO.Music.sting('spotted'); this.slowT = 0.35; this.slowK = 0.35; }
+      gd.alertT = 0;
       this.raiseAlarm(gd);
     }
 
@@ -370,12 +322,14 @@
       this.failReason = reason;
       this.failT = 0;
       LO.Sfx.play('caught');
+      LO.Music.sting('fail');
     }
 
     // ------------------------------------------------------------ harm
     setLying(a) {
       if (a.lying) return;
       a.lying = true;
+      a.fallT = 0;
       a.y += a.h - 12; a.h = 12; a.vx = 0;
       a.climbing = false;
     }
@@ -385,6 +339,8 @@
       if (a.possessed) this.release();
       a.ko = true; a.state = 'ko';
       this.setLying(a);
+      this.hitStop = 0.09; this.shake = Math.max(this.shake, 4);
+      for (let i = 0; i < 8; i++) this.particles.push({ x: a.cx, y: a.bottom - 8, vx: LO.rand(-90, 90), vy: LO.rand(-120, -20), t: LO.rand(0.25, 0.5), color: 'rgba(200,190,170,0.7)' });
       LO.Sfx.play('thud'); LO.Input.rumble(0.5, 0.3, 140);
       this.noise(a.cx, a.cy, 2.2 * TS, 'thud');
       if (a.isTarget) this.neutralize(method);
@@ -396,6 +352,7 @@
       if (a === this.player) { this.fail(cause === 'zap' ? 'You were electrocuted.' : 'You were crushed.'); return; }
       if (a.possessed) this.release(true);
       a.dead = true; a.cause = cause;
+      this.hitStop = Math.max(this.hitStop, 0.07);
       if (a.kind === 'critter') return;
       a.ko = false; a.state = 'dead';
       this.setLying(a);
@@ -406,6 +363,8 @@
     neutralize(method) {
       if (this.targetDown) return;
       this.targetDown = method;
+      this.slowT = 1.1; this.slowK = 0.3;
+      LO.Music.sting('target');
       this.say('TARGET NEUTRALIZED — ' + METHOD_NAMES[method].toUpperCase(), 3.5);
       this.float(this.target.cx, this.target.y - 30, METHOD_NAMES[method], '#ffd166', 2.5);
       LO.Sfx.play('win');
@@ -429,11 +388,12 @@
       for (let i = 0; i < 20; i++) this.spark(f.x + f.w / 2, f.y + f.h / 2, '#9be7ff');
       this.noise(f.x + f.w / 2, f.y + f.h / 2, 10 * TS, 'zap');
       for (const pd of this.puddles) for (let i = 0; i < 4; i++) this.spark(pd.x + LO.rand(0, TS), pd.y + TS - 4, '#9be7ff');
-      this.say('Power overload!', 2);
+      this.say(this.lasers.length ? 'BLACKOUT' : 'Power overload!', 2);
+      if (this.lasers.length) LO.Music.sting('blackout');
     }
 
     breakLamp(l) {
-      l.on = false; l.broken = true;
+      l.on = false; l.broken = true; l.flash = 0.22;
       this.stats.lampsShot++;
       LO.Sfx.play('glass'); LO.Input.rumble(0.1, 0.35, 90);
       for (let i = 0; i < 14; i++) this.spark(l.x, l.y, '#ffe9a8');
@@ -633,6 +593,7 @@
       if (this.state !== 'play') return;
       this.state = 'won';
       LO.Sfx.play('win');
+      LO.Music.sting('win');
       this.results = this.computeResults();
     }
 
@@ -726,14 +687,22 @@
 
     update(dt) {
       const I = LO.Input;
-      if (this.state === 'failed') { this.failT += dt; this.updateFx(dt); return; }
+      if (this.state === 'failed') { this.failT += dt; this.updateFx(dt); LO.Scenery.update(this, dt); return; }
       if (this.state !== 'play') return;
+      // impact freeze and slow motion for the big moments
+      if (this.hitStop > 0) { this.hitStop -= dt; this.shake = Math.max(this.shake, 2); return; }
+      this.realDt = dt;
+      if (this.slowT > 0) { this.slowT -= dt; dt *= this.slowK; }
       this.time += dt;
+      this.updateLamps(dt);
+      LO.Scenery.update(this, dt);
       this.alarmCool -= dt;
       if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
       const p = this.player;
       p.suspiciousT = Math.max(0, p.suspiciousT - dt);
       p.takedownT = Math.max(0, p.takedownT - dt);
+      p.aimT = Math.max(0, (p.aimT || 0) - dt);
+      LO.updateScarf(p, dt);
       if (this.controlled !== p) this.controlled.takedownT = Math.max(0, (this.controlled.takedownT || 0) - dt);
 
       // hidden?
@@ -810,7 +779,40 @@
       this.updateHazards(dt);
       this.updateProjectiles(dt);
       this.updateFx(dt);
+      this.updateMood(dt);
       this.updateCamera(dt);
+    }
+
+    updateLamps(dt) {
+      for (const l of this.lamps) {
+        l.flash = Math.max(0, l.flash - dt);
+        // the odd buzzing flicker (looks only; the light still counts)
+        l.flickT -= dt;
+        if (l.flickT <= 0) { l.flickering = 0.3 + Math.random() * 0.4; l.flickT = 8 + Math.random() * 25; }
+        if (l.flickering > 0) { l.flickering -= dt; l.fl = Math.random() < 0.5 ? 0.35 : 1; } else l.fl = 1;
+      }
+    }
+
+    // How tense things are, for the screen tint and the music.
+    updateMood(dt) {
+      const m = this.mood, p = this.player;
+      let alert = 0, watched = 0, susp = 0;
+      for (const g of this.guards) {
+        if (!g.functional || g.possessed) continue;
+        g.alertT = (g.alertT ?? 9) + dt;
+        if (g.state === 'alert' || g.state === 'flee') alert = 1;
+        if (g.seesPlayer && g.susp > 0.08) watched = 1;
+        if (g.state === 'investigate' || g.seesPlayer) susp = Math.max(susp, g.susp);
+      }
+      for (const g of this.guards) if (!g.functional) g.fallT = (g.fallT ?? 9) + dt;
+      const hidden = p.hidden || (this.playerLight || 0) < 0.08 ? 1 : 0;
+      const k = Math.min(1, (this.realDt || dt) * 4);
+      m.alert += (alert - m.alert) * Math.min(1, (this.realDt || dt) * (alert > m.alert ? 10 : 2));
+      m.watched += (watched * (1 - alert) - m.watched) * k;
+      m.possess += ((this.controlled !== p ? 1 : 0) - m.possess) * k;
+      m.hidden += (hidden * (1 - alert) - m.hidden) * k;
+      LO.Music.setTension({ susp, alert: !!alert, hidden: !!hidden });
+      LO.Music.setPower(this.lasersOn());
     }
 
     footsteps(p, ctl, dt) {
@@ -824,6 +826,7 @@
           this.noise(p.cx, p.bottom - 4, running ? 6 * TS : 2 * TS, 'step');
         }
       }
+      if (p.landSpeed > 350) for (let i = 0; i < (p.landSpeed > 650 ? 10 : 5); i++) this.particles.push({ x: p.cx + LO.rand(-8, 8), y: p.bottom - 2, vx: LO.rand(-70, 70), vy: LO.rand(-50, -10), t: LO.rand(0.25, 0.45), color: 'rgba(170,160,150,0.5)', puff: true });
       if (p.landSpeed > 650) { LO.Sfx.play('land'); this.noise(p.cx, p.bottom, 4 * TS, 'step'); }
     }
 
@@ -834,6 +837,7 @@
       const sx = p.cx + p.dir * 4, sy = p.y + 14;
       const a = Math.atan2(m.y - sy, m.x - sx);
       p.dir = Math.cos(a) < 0 ? -1 : 1;
+      p.aimT = 0.3; p.aimAng = a;
       this.ammo--; this.stats.shots++;
       this.projectiles.push({ type: 'pellet', x: sx, y: sy, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, t: 1.2 });
       p.suspiciousT = Math.max(p.suspiciousT, 1);
@@ -988,7 +992,13 @@
     updateFx(dt) {
       for (const r of this.rings) r.t -= dt;
       this.rings = this.rings.filter((r) => r.t > 0);
-      for (const p of this.particles) { p.t -= dt; p.vy += 600 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      for (const p of this.particles) {
+        p.t -= dt;
+        if (p.float) { p.vx += Math.sin(p.t * 9 + p.y) * 20 * dt; }
+        else if (p.puff) { p.vx *= 1 - dt * 5; p.vy = p.vy * (1 - dt * 5) - 8 * dt; p.size = (p.size || 2) + dt * 14; }
+        else p.vy += 600 * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt;
+      }
       this.particles = this.particles.filter((p) => p.t > 0);
       for (const f of this.floaters) { f.t -= dt; f.y -= 18 * dt; }
       this.floaters = this.floaters.filter((f) => f.t > 0);
@@ -1019,28 +1029,42 @@
     }
 
     // ------------------------------------------------------------ render
+    // Sky first, then the world on its own layer so the darkness only falls on
+    // the world (windows stay bright), then light, glow and the overlays.
     render(ctx) {
       const cam = this.cam;
       const sx = this.shake ? LO.rand(-this.shake, this.shake) * 0.5 : 0;
       const sy = this.shake ? LO.rand(-this.shake, this.shake) * 0.5 : 0;
       const ox = Math.round(-cam.x + sx), oy = Math.round(-cam.y + sy);
-      ctx.fillStyle = '#05060b';
-      ctx.fillRect(0, 0, LO.VIEW_W, LO.VIEW_H);
+      LO.Scenery.drawSky(ctx, this);
+      const W = this.wctx;
+      W.setTransform(1, 0, 0, 1, 0, 0);
+      W.globalCompositeOperation = 'source-over';
+      W.clearRect(0, 0, LO.VIEW_W, LO.VIEW_H);
+      W.save();
+      W.translate(ox, oy);
+      W.drawImage(this.staticCanvas, 0, 0);
+      this.drawDynamicTiles(W);
+      this.drawObjects(W);
+      this.drawActors(W);
+      this.drawProjectiles(W);
+      LO.Scenery.drawWeather(W, this);
+      W.restore();
+      this.buildLightMap(ox, oy);
+      W.globalCompositeOperation = 'source-atop';
+      W.drawImage(this.lightCanvas, 0, 0);
+      W.globalCompositeOperation = 'source-over';
+      ctx.drawImage(this.worldCanvas, 0, 0);
+
       ctx.save();
       ctx.translate(ox, oy);
-      ctx.drawImage(this.staticCanvas, 0, 0);
-      this.drawDynamicTiles(ctx);
-      this.drawObjects(ctx);
-      this.drawActors(ctx);
-      this.drawProjectiles(ctx);
-      ctx.restore();
-
-      this.drawLighting(ctx, ox, oy);
-
-      ctx.save();
-      ctx.translate(ox, oy);
+      this.drawGlow(ctx);
+      LO.Scenery.drawGlow(ctx, this);
+      this.drawRim(ctx);
       this.drawOverlayWorld(ctx);
       ctx.restore();
+      if (this.lightning > 0) { ctx.fillStyle = `rgba(200,210,255,${this.lightning * 0.1})`; ctx.fillRect(0, 0, LO.VIEW_W, LO.VIEW_H); }
+      LO.Scenery.drawVignette(ctx, this);
       LO.drawHUD(ctx, this);
     }
 
@@ -1216,81 +1240,148 @@
       }
       for (const p of this.particles) {
         ctx.fillStyle = p.color; ctx.globalAlpha = Math.min(1, p.t * 2);
-        ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5);
+        if (p.puff) { ctx.beginPath(); ctx.arc(p.x, p.y, p.size || 2, 0, Math.PI * 2); ctx.fill(); }
+        else ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5);
       }
       ctx.globalAlpha = 1;
     }
 
+    // A shaded lamp never moves, so its light and glow are drawn once into stamps.
+    makeLampStamps(l) {
+      const r = l.r, size = Math.ceil(r * 2);
+      const mk = () => { const c = document.createElement('canvas'); c.width = size; c.height = size; return c; };
+      const cut = mk(), glow = mk();
+      const C = cut.getContext('2d'), G = glow.getContext('2d');
+      for (const c of [C, G]) { c.translate(r - l.x, r - l.y); polyPath(c, l.poly); c.clip(); }
+      const radial = (c, x, y, rr, col, stops) => {
+        const g = c.createRadialGradient(x, y, 0, x, y, rr);
+        for (const [k, a] of stops) g.addColorStop(k, `rgba(${col},${a})`);
+        c.fillStyle = g; c.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+      };
+      radial(C, l.x, l.y, 56, '0,0,0', [[0, 0.85], [1, 0]]);
+      for (const [extra, a] of [[0.32, 0.45], [0.16, 0.35], [0, 1]]) {
+        C.save(); wedge(C, l.x, l.y, l.r, Math.PI / 2 - l.cone - extra, Math.PI / 2 + l.cone + extra); C.clip();
+        radial(C, l.x, l.y, l.r, '0,0,0', [[0, a], [0.45, 0.8 * a], [0.8, 0.3 * a], [1, 0]]);
+        C.restore();
+      }
+      G.globalCompositeOperation = 'lighter';
+      // layered wedges give the pool a soft edge, and a narrower one reads as a beam in the air
+      for (const [extra, al] of [[0.3, 0.1], [0.12, 0.1], [-0.1, 0.12], [-0.45, 0.06]]) {
+        G.save(); wedge(G, l.x, l.y, l.r, Math.PI / 2 - l.cone - extra, Math.PI / 2 + l.cone + extra); G.clip();
+        radial(G, l.x, l.y, l.r, l.color, [[0, al], [0.55, al * 0.45], [1, 0]]);
+        G.restore();
+      }
+      radial(G, l.x, l.y + 2, 22, l.color, [[0, 0.7], [1, 0]]);
+      l.cutStamp = cut; l.glowStamp = glow;
+    }
+
+    inView(x, y, r) {
+      return x + r > this.cam.x && x - r < this.cam.x + LO.VIEW_W && y + r > this.cam.y && y - r < this.cam.y + LO.VIEW_H;
+    }
+
     // Darkness with light shapes cut out of it.
-    drawLighting(ctx, ox, oy) {
+    buildLightMap(ox, oy) {
       const L = this.lctx;
       L.setTransform(1, 0, 0, 1, 0, 0);
       L.globalCompositeOperation = 'source-over';
       L.clearRect(0, 0, LO.VIEW_W, LO.VIEW_H);
-      L.fillStyle = this.def.dark || 'rgba(3,4,10,0.9)';
+      L.fillStyle = this.theme.dark;
       L.fillRect(0, 0, LO.VIEW_W, LO.VIEW_H);
       L.globalCompositeOperation = 'destination-out';
       L.translate(ox, oy);
-      const inView = (x, y, r) => x + r > this.cam.x && x - r < this.cam.x + LO.VIEW_W && y + r > this.cam.y && y - r < this.cam.y + LO.VIEW_H;
-      const polyPath = (c, pts) => { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath(); };
-      const wedge = (c, l) => { c.beginPath(); c.moveTo(l.x, l.y); c.arc(l.x, l.y, l.r, l.ang - l.spot.half, l.ang + l.spot.half); c.closePath(); };
+      const radial = (x, y, r, stops) => {
+        const g = L.createRadialGradient(x, y, 0, x, y, r);
+        for (const [k, a] of stops) g.addColorStop(k, `rgba(0,0,0,${a})`);
+        L.fillStyle = g; L.fillRect(x - r, y - r, r * 2, r * 2);
+      };
       for (const l of this.lamps) {
-        if (!l.on || !inView(l.x, l.y, l.r)) continue;
+        if (!l.on || !this.inView(l.x, l.y, l.r)) continue;
+        const f = l.fl;
+        if (!l.spot) { L.globalAlpha = f; L.drawImage(l.cutStamp, l.x - l.r, l.y - l.r); L.globalAlpha = 1; continue; }
         L.save(); polyPath(L, l.poly); L.clip();
-        if (l.spot) { wedge(L, l); L.clip(); }
-        const g = L.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
-        if (l.spot) { g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.6, 'rgba(0,0,0,0.85)'); g.addColorStop(0.9, 'rgba(0,0,0,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
-        else { g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.45, 'rgba(0,0,0,0.8)'); g.addColorStop(0.8, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
-        L.fillStyle = g; L.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+        if (l.spot) {
+          wedge(L, l.x, l.y, l.r, l.ang - l.spot.half, l.ang + l.spot.half); L.clip();
+          radial(l.x, l.y, l.r, [[0, f], [0.6, 0.85 * f], [0.9, 0.4 * f], [1, 0]]);
+        }
         L.restore();
       }
       // guard flashlights and vision polygons
       for (const g of this.guards) {
         g.visPoly = null;
-        if (!g.functional || g.possessed || !inView(g.cx, g.cy, 300)) continue;
+        if (!g.functional || g.possessed || !this.inView(g.cx, g.cy, 300)) continue;
         const key = Math.round(g.eyeX) + ',' + Math.round(g.eyeY);
         if (g.visKey !== key) { g.visKey = key; g.visCache = this.level.visibility(g.eyeX, g.eyeY, 8.5 * TS); }
         g.visPoly = g.visCache;
         if (!g.flashlight) continue;
         L.save(); polyPath(L, g.visPoly); L.clip();
-        L.beginPath(); L.moveTo(g.eyeX, g.eyeY);
-        L.arc(g.eyeX, g.eyeY, FL_R, g.dir > 0 ? -FL_HALF : Math.PI - FL_HALF, g.dir > 0 ? FL_HALF : Math.PI + FL_HALF);
-        L.closePath(); L.clip();
-        const gr = L.createRadialGradient(g.eyeX, g.eyeY, 0, g.eyeX, g.eyeY, FL_R);
-        gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-        L.fillStyle = gr; L.fillRect(g.eyeX - FL_R, g.eyeY - FL_R, FL_R * 2, FL_R * 2);
+        wedge(L, g.eyeX, g.eyeY, FL_R, g.dir > 0 ? -FL_HALF : Math.PI - FL_HALF, g.dir > 0 ? FL_HALF : Math.PI + FL_HALF); L.clip();
+        radial(g.eyeX, g.eyeY, FL_R, [[0, 1], [0.6, 0.7], [1, 0]]);
         L.restore();
+      }
+      // windows let in a little moonlight
+      for (const w of this.windows) {
+        if (!this.inView(w.x, w.y, 80)) continue;
+        L.fillStyle = 'rgba(0,0,0,0.35)'; L.fillRect(w.x, w.y, w.w, w.h);
       }
       // night-vision goggles: you can always make out your surroundings a little
       const a = this.controlled;
-      const gr = L.createRadialGradient(a.cx, a.cy, 0, a.cx, a.cy, 170);
-      gr.addColorStop(0, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      L.fillStyle = gr; L.fillRect(a.cx - 170, a.cy - 170, 340, 340);
+      radial(a.cx, a.cy, 170, [[0, 0.45], [1, 0]]);
       L.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(this.lightCanvas, 0, 0);
+    }
 
-      // warm glow on top
+    // Additive light on top: colored pools, visible beams, bulbs and flashes.
+    drawGlow(ctx) {
       ctx.save();
-      ctx.translate(ox, oy);
       ctx.globalCompositeOperation = 'lighter';
+      const radial = (x, y, r, col, stops) => {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        for (const [k, a] of stops) g.addColorStop(k, `rgba(${col},${a})`);
+        ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      };
       for (const l of this.lamps) {
-        if (!l.on || !inView(l.x, l.y, l.r)) continue;
-        ctx.save(); polyPath(ctx, l.poly); ctx.clip();
-        if (l.spot) { wedge(ctx, l); ctx.clip(); }
-        const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
-        const col = l.spot ? '225,238,255' : l.circuit ? '190,220,255' : '255,200,120';
-        g.addColorStop(0, `rgba(${col},0.22)`); g.addColorStop(1, `rgba(${col},0)`);
-        ctx.fillStyle = g; ctx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+        if (l.flash > 0) radial(l.x, l.y, 90, l.color, [[0, l.flash * 2], [1, 0]]);
+        if (!l.on || !this.inView(l.x, l.y, l.r)) continue;
+        const f = l.fl;
+        if (!l.spot) {
+          ctx.globalAlpha = f; ctx.drawImage(l.glowStamp, l.x - l.r, l.y - l.r); ctx.globalAlpha = 1;
+        } else {
+          ctx.save(); polyPath(ctx, l.poly); ctx.clip();
+          wedge(ctx, l.x, l.y, l.r, l.ang - l.spot.half, l.ang + l.spot.half); ctx.clip();
+          radial(l.x, l.y, l.r, l.color, [[0, 0.3 * f], [0.7, 0.1 * f], [1, 0]]);
+          ctx.restore();
+          radial(l.x, l.y + 2, 22, l.color, [[0, 0.7 * f], [1, 0]]);
+        }
+        ctx.fillStyle = `rgba(255,250,235,${0.95 * f})`;
+        ctx.beginPath(); ctx.arc(l.x, l.y + 2, 2.6, 0, Math.PI * 2); ctx.fill();
+      }
+      for (const g of this.guards) {
+        if (!g.flashlight || !g.visPoly) continue;
+        ctx.save(); polyPath(ctx, g.visPoly); ctx.clip();
+        wedge(ctx, g.eyeX, g.eyeY, FL_R, g.dir > 0 ? -FL_HALF : Math.PI - FL_HALF, g.dir > 0 ? FL_HALF : Math.PI + FL_HALF); ctx.clip();
+        radial(g.eyeX, g.eyeY, FL_R, '255,240,200', [[0, 0.22], [1, 0]]);
         ctx.restore();
-        ctx.fillStyle = 'rgba(255,240,200,0.9)';
-        ctx.beginPath(); ctx.arc(l.x, l.y + 2, 3, 0, Math.PI * 2); ctx.fill();
+      }
+      for (const e of this.exits) radial(e.x + 16, e.y - 6, 26, this.targetDown ? '90,255,140' : '60,120,80', [[0, this.targetDown ? 0.5 + Math.sin(this.time * 4) * 0.15 : 0.15], [1, 0]]);
+      ctx.restore();
+    }
+
+    // Lit characters catch a rim of lamp light, so being exposed reads at a glance.
+    drawRim(ctx) {
+      const t = this.time, col = this.theme.lamp;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const p = this.player;
+      if (!p.locker && this.playerLight > 0.12) LO.drawPlayer(ctx, p, t, false, `rgba(${col},${Math.min(0.32, this.playerLight * 0.32)})`);
+      for (const g of this.guards) {
+        if (!g.functional || !this.inView(g.cx, g.cy, 40)) continue;
+        const L = this.lightAt(g.cx, g.y + 12);
+        if (L > 0.12) LO.drawGuard(ctx, g, t, `rgba(${col},${Math.min(0.26, L * 0.26)})`);
       }
       ctx.restore();
     }
 
     drawOverlayWorld(ctx) {
       const t = this.time;
-      const polyPath = (c, pts) => { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath(); };
       // vision cones
       for (const g of this.guards) {
         if (!g.visPoly) continue;
@@ -1349,7 +1440,7 @@
       ctx.textAlign = 'center';
       for (const g of this.guards) {
         if (!g.functional) {
-          if (g.found) { ctx.fillStyle = '#ff8a5c'; ctx.font = 'bold 10px monospace'; ctx.fillText('found', g.cx, g.y - 6); }
+          if (g.found) { ctx.fillStyle = '#ff8a5c'; ctx.font = LO.F.d(13); ctx.fillText('FOUND', g.cx, g.y - 8); }
           continue;
         }
         const hx = g.cx, hy = g.y - 12;
@@ -1359,31 +1450,35 @@
         }
         if (g.possessed) continue;
         if (g.state === 'alert' || g.state === 'flee') {
-          ctx.fillStyle = '#ff4040'; ctx.font = 'bold 18px monospace'; ctx.fillText('!', hx, hy - 6);
+          const pop = 1 + Math.max(0, 0.3 - (g.alertT || 9)) * 4;
+          ctx.save(); ctx.translate(hx, hy - 6); ctx.scale(pop, pop);
+          ctx.font = LO.F.d(26); ctx.fillStyle = '#000'; ctx.fillText('!', 1, 1); ctx.fillStyle = '#ff4040'; ctx.fillText('!', 0, 0);
+          ctx.restore();
           if (g.seesPlayer && g.state === 'alert') {
             const k = g.aimT / this.aimTime;
             ctx.strokeStyle = `rgba(255,40,40,${0.2 + k * 0.6})`; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(g.cx + g.dir * 10, g.y + 18); ctx.lineTo(p.cx, p.cy); ctx.stroke();
           }
         } else if (g.state === 'dazed') {
-          ctx.fillStyle = '#c9a0ff'; ctx.font = 'bold 12px monospace';
-          ctx.fillText('~', hx + Math.sin(t * 6) * 4, hy - 6);
+          ctx.fillStyle = '#c9a0ff'; ctx.font = LO.F.d(16);
+          ctx.fillText('~ ? ~', hx + Math.sin(t * 6) * 3, hy - 6);
         } else if (g.susp > 0.02) {
           ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(hx - 10, hy - 4, 20, 4);
           ctx.fillStyle = g.susp > 0.3 ? '#ffaa3c' : '#ffe9a8'; ctx.fillRect(hx - 10, hy - 4, 20 * g.susp, 4);
-          if (g.susp > 0.3) { ctx.font = 'bold 14px monospace'; ctx.fillText('?', hx, hy - 8); }
+          if (g.susp > 0.3) { ctx.font = LO.F.d(20); ctx.fillStyle = '#000'; ctx.fillText('?', hx + 1, hy - 7); ctx.fillStyle = '#ffaa3c'; ctx.fillText('?', hx, hy - 8); }
         }
       }
       // speech
-      ctx.font = '11px sans-serif';
+      ctx.font = LO.F.t(12);
       for (const g of this.guards) {
         if (!g.speech || g.speechT <= 0) continue;
-        const w = ctx.measureText(g.speech).width + 10;
-        const bx = g.cx - w / 2, by = g.y - 46;
+        const w = ctx.measureText(g.speech).width + 14;
+        const bx = g.cx - w / 2, by = g.y - 48;
         ctx.globalAlpha = Math.min(1, g.speechT * 2);
-        ctx.fillStyle = 'rgba(240,240,230,0.92)'; ctx.fillRect(bx, by, w, 16);
-        ctx.beginPath(); ctx.moveTo(g.cx - 3, by + 16); ctx.lineTo(g.cx + 3, by + 16); ctx.lineTo(g.cx, by + 21); ctx.fill();
-        ctx.fillStyle = '#111'; ctx.fillText(g.speech, g.cx, by + 12);
+        ctx.fillStyle = g.state === 'alert' || g.state === 'flee' ? '#ffd9cf' : '#ece3cc';
+        ctx.beginPath(); ctx.roundRect(bx, by, w, 18, 6); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(g.cx - 4, by + 17); ctx.lineTo(g.cx + 4, by + 17); ctx.lineTo(g.cx + 1, by + 23); ctx.fill();
+        ctx.fillStyle = '#1e1a14'; ctx.fillText(g.speech, g.cx, by + 13);
         ctx.globalAlpha = 1;
       }
       // noise rings
@@ -1402,18 +1497,18 @@
         const a = this.controlled;
         ctx.fillStyle = this.interaction.danger ? '#ffd166' : '#ffffff';
         ctx.font = 'bold 11px monospace';
-        ctx.fillText('E', a.cx, a.y - 18 + Math.sin(t * 6) * 2);
+        LO.drawButtonGlyph(ctx, 'interact', a.cx, a.y - 22 + Math.sin(t * 6) * 2, 8);
         if (this.holdT > 0 && this.interaction.hold) {
           ctx.strokeStyle = '#9dffb0'; ctx.lineWidth = 3;
           ctx.beginPath(); ctx.arc(a.cx, a.y - 22, 9, -Math.PI / 2, -Math.PI / 2 + (this.holdT / this.interaction.hold) * Math.PI * 2); ctx.stroke();
         }
       }
       // floaters
-      ctx.font = 'bold 12px monospace';
+      ctx.font = LO.F.d(17);
       for (const f of this.floaters) {
         ctx.globalAlpha = Math.min(1, f.t * 1.5);
-        ctx.fillStyle = '#000'; ctx.fillText(f.text, f.x + 1, f.y + 1);
-        ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillText(f.text.toUpperCase(), f.x + 1, f.y + 1);
+        ctx.fillStyle = f.color; ctx.fillText(f.text.toUpperCase(), f.x, f.y);
       }
       ctx.globalAlpha = 1;
       // aim reticle

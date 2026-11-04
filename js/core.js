@@ -175,6 +175,7 @@ window.LO = window.LO || {};
         this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
         const d = this.noiseBuf.getChannelData(0);
         for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        if (LO.Music) LO.Music.init();
       } catch (e) { this.ctx = null; }
     },
     toggleMute() {
@@ -193,6 +194,7 @@ window.LO = window.LO || {};
       g.gain.setValueAtTime(vol, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + dur);
       o.connect(g); g.connect(this.master);
+      if (this._rev && LO.Music && LO.Music.sfxVerb) g.connect(LO.Music.sfxVerb);
       o.start(t); o.stop(t + dur + 0.02);
     },
     noise(dur, vol = 0.2, freq = 2000, delay = 0, q = 1) {
@@ -206,10 +208,12 @@ window.LO = window.LO || {};
       g.gain.setValueAtTime(vol, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + dur);
       s.connect(f); f.connect(g); g.connect(this.master);
+      if (this._rev && LO.Music && LO.Music.sfxVerb) g.connect(LO.Music.sfxVerb);
       s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
     },
     play(name) {
       if (!this.ctx || this.muted) return;
+      this._rev = !['step', 'run', 'click', 'type'].includes(name);
       switch (name) {
         case 'step': this.noise(0.05, 0.05, 600, 0, 2); break;
         case 'run': this.noise(0.07, 0.12, 500, 0, 2); break;
