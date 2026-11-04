@@ -210,7 +210,12 @@
         ctx.font = '13px sans-serif';
         const lines = LO.wrapText(ctx, LO.Input.fill(sgn.text), 560);
         const h = 18 + lines.length * 18;
-        const y = LO.VIEW_H - 60 - h;
+        // keep the tip on the opposite half of the screen from the character,
+        // with a little slack so it doesn't flip back and forth at the middle
+        const sy = cur.cy - g.cam.y;
+        if (sy > LO.VIEW_H * 0.55) g.tipTop = true;
+        else if (sy < LO.VIEW_H * 0.45) g.tipTop = false;
+        const y = g.tipTop ? 124 : LO.VIEW_H - 60 - h;
         panel(ctx, LO.VIEW_W / 2 - 300, y, 600, h);
         ctx.fillStyle = '#e8dcc0';
         lines.forEach((ln, i) => ctx.fillText(ln, LO.VIEW_W / 2, y + 22 + i * 18));
