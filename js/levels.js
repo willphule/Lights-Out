@@ -10,6 +10,9 @@
 //   C  hanging crate      u  crane release    v  gate lever
 //   f  fuse box           k  locker           ?  sign
 //   a  pellets            n  bottle           |  guard turn point (invisible)
+//   S  searchlight (sweeps) s  searchlight on the fuse-box circuit
+//   z  laser tripwire: a run of z on one row is one beam at chest height.
+//      Crouch under it. Uniforms don't trip it, and it shuts off while a fuse box is tripped.
 (function (LO) {
   LO.LEVELS = [
     {
@@ -136,6 +139,87 @@
         '# X P ? H    |    g      r    k |w VVV  H|     f  g         w  #',
         '################################################################',
         '################################################################',
+      ],
+    },
+    {
+      id: 'debtors-yard',
+      name: 'Debtors\' Yard',
+      place: 'Okka Debtors\' Prison',
+      target: { name: 'Warden Okka', route: [[58, 6, 1], [40, 6, -1], [27, 7, 1, true]] },
+      guards: [{ flashlight: true }, {}, {}, {}, { route: [[43, 99, -1]] }],
+      ammo: 6, bottles: 2, par: 270,
+      fuseTime: 20,
+      briefing: 'Anyone who owes the Vells more than they can pay ends up in Warden Okka\'s yard, working off a debt that grows faster than their wages. Okka walks the yard every night under the searchlights. Make it his last round, and open as many cells as you can.',
+      approaches: [
+        { key: 'accident-crush', name: 'Dropped Delivery', hint: 'A supply pallet hangs from the gantry over the yard. Its release is on the walkway above.' },
+        { key: 'accident-zap', name: 'Rainy Night', hint: 'Okka inspects the line standing in rainwater. The yard lights run off the fuse box in cell block A.' },
+        { key: 'disguise', name: 'Shift Change', hint: 'Yard guards don\'t look twice at a uniform, even under the searchlights.' },
+        { key: 'puppeteer', name: 'Turnkey', hint: 'A guard stands watch by the office door every time Okka walks past.' },
+      ],
+      tips: [
+        'This lever releases the supply pallet hanging over the yard.',
+        'Searchlights sweep the yard and light up anything they touch. Shoot one out ({shoot}), or cut its power.',
+      ],
+      map: [
+        '##################################################################',
+        '#                       L                           L            #',
+        '#                                                                #',
+        '# ?   w  w    |     n         g         u   |             a      #',
+        '###H##########################################################H###',
+        '#  H    L   #        s      Y      s         #         L      H  #',
+        '#  H        #                           C    #                H  #',
+        '#  H        #                                #                H  #',
+        '#  H        #                                #                H  #',
+        '#  H f g w  V                                #  k   g         Hw #',
+        '##########H##---H                            #####H###############',
+        '#     l   H #   H                            #    H     L        #',
+        '#         H #   H                            #    H              #',
+        '#         H #   H                            #    H              #',
+        '#         H     H                            D    H              #',
+        '# X P ?   H   | H   g     ~~~             |g D k  H       T    w #',
+        '##################################################################',
+        '##################################################################',
+      ],
+    },
+    {
+      id: 'power-station',
+      name: 'Lights Out',
+      place: 'Morrow Power & Light, Central Station',
+      target: { name: 'Chairman Morrow', route: [[62, 7, 1], [38, 6, -1], [31, 7, 1, true]] },
+      guards: [{ flashlight: true }, {}, {}, { flashlight: true }, { route: [[63, 99, -1]], name: 'Bodyguard' }],
+      ammo: 6, bottles: 3, par: 330,
+      fuseTime: 16,
+      briefing: 'Chairman Morrow sold the Vells their power, their guards and their judges. Every lamp in the city runs through his station, and tonight he is walking the floor himself. Put him out, and the lights with him.',
+      approaches: [
+        { key: 'accident-zap', name: 'Coolant Leak', hint: 'Morrow checks the turbine standing in leaked coolant. The master breaker is in the west annex.' },
+        { key: 'accident-crush', name: 'Dead Weight', hint: 'The turbine hall crane is released from the cable crawlway.' },
+        { key: 'disguise', name: 'Company Badge', hint: 'Lasers ignore staff badges, and the control room door opens for uniforms.' },
+        { key: 'puppeteer', name: 'Bodyguard', hint: 'His bodyguard never leaves the control room.' },
+      ],
+      tips: [
+        'The crane release for the turbine hall is up here. Mind the lasers.',
+        'This is the master breaker. Overload it and the station goes dark: lights, searchlight and lasers. Anyone standing in coolant gets the full voltage, and every guard nearby comes to check.',
+        'Red beams are laser tripwires. Touch one and every guard nearby comes running. Crouch ({crouch}) to slip underneath. Staff badges don\'t set them off.',
+      ],
+      map: [
+        '######################################################################',
+        '#           l                     l                     l            #',
+        '#                                                                    #',
+        '#   ?     w          |  n   zzz       u       g   w          |  a    #',
+        '##H#########################################H#####################H###',
+        '# H       L        #     Y       s      Y   H  #         L        H  #',
+        '# H                #                  C     H  #                  H  #',
+        '# H                #                        H  #                  H  #',
+        '# H                #                        H  #                  H  #',
+        '# H ? f    g    w  #                        H  # k   g    zzz     Hw #',
+        '##############H#####                        H  ########H##############',
+        '#       l     H    #                        H  #       H    L        #',
+        '#             H    #                        H  #       H             #',
+        '#             H    #                        H  #       H             #',
+        '#             H                             H  D       H             #',
+        '# X P ?  w    Hzzzz  |  g     ~~~          |H  D  zzz  H      T g    #',
+        '######################################################################',
+        '######################################################################',
       ],
     },
   ];

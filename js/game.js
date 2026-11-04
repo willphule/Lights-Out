@@ -23,7 +23,7 @@
       this.fuses = []; this.levers = []; this.lockers = []; this.cages = []; this.exits = [];
       this.signs = []; this.pickups = []; this.projectiles = []; this.rings = [];
       this.particles = []; this.floaters = []; this.workers = []; this.tracers = [];
-      this.puddles = [];
+      this.puddles = []; this.lasers = []; this.laserTiles = [];
       this.zapT = 0; this.shake = 0; this.alarmCool = 0; this.banner = null;
       this.ammo = def.ammo ?? 6; this.bottles = def.bottles ?? 2;
       this.energy = 10; this.maxEnergy = 10;
@@ -68,6 +68,15 @@
               on: true, broken: false, circuit: m.ch === 'Y' || m.ch === 'y', ceil: top * TS, poly: null });
             break;
           }
+          case 'S': case 's': {
+            // searchlight: a narrow beam that sweeps back and forth
+            let top = m.y; while (top > 0 && !'#-'.includes(lvl.tile(m.x, top - 1))) top--;
+            const n = this.lamps.filter((l) => l.spot).length;
+            this.lamps.push({ x: px + 16, y: py + 10, r: 440, on: true, broken: false, circuit: m.ch === 's', ceil: top * TS, poly: null,
+              spot: { base: Math.PI / 2, swing: 0.6, speed: 0.85 + n * 0.12, phase: n * 2.4, half: 0.2 }, ang: Math.PI / 2 });
+            break;
+          }
+          case 'z': this.laserTiles.push(m); break;
           case 'C': {
             let top = m.y; while (top > 0 && !'#-'.includes(lvl.tile(m.x, top - 1))) top--;
             this.crates.push({ x: px + 1, y: py + 2, w: 30, h: 28, ropeTop: top * TS, state: 'hanging', vy: 0 });
@@ -86,6 +95,13 @@
       }
       for (let y = 0; y < lvl.h; y++) for (let x = 0; x < lvl.w; x++)
         if (lvl.tile(x, y) === '~') this.puddles.push({ x: x * TS, y: y * TS, w: TS, h: TS });
+      // runs of z markers on one row become a single laser tripwire
+      this.laserTiles.sort((a, b) => a.y - b.y || a.x - b.x);
+      for (const m of this.laserTiles) {
+        const last = this.lasers[this.lasers.length - 1];
+        if (last && last.row === m.y && last.tx1 === m.x - 1) { last.tx1 = m.x; last.x1 = (m.x + 1) * TS; continue; }
+        this.lasers.push({ row: m.y, tx1: m.x, x0: m.x * TS, x1: (m.x + 1) * TS, y: (m.y + 1) * TS - 30, cool: 0 });
+      }
       if (!this.player) this.player = new LO.Player(64, 64);
       for (const l of this.lamps) l.poly = lvl.visibility(l.x, l.y, l.r);
       for (const g of this.guards) this.computePatrol(g);
@@ -205,7 +221,12 @@
       for (const l of this.lamps) {
         if (!l.on) continue;
         const d = LO.dist(l.x, l.y, x, y);
-        if (d < l.r && lvl.los(l.x, l.y, x, y)) L += Math.pow(1 - d / l.r, 1.1) * 1.3;
+        if (d >= l.r) continue;
+        if (l.spot) {
+          let da = Math.atan2(y - l.y, x - l.x) - l.ang;
+          da = Math.atan2(Math.sin(da), Math.cos(da));
+          if (Math.abs(da) < l.spot.half && lvl.los(l.x, l.y, x, y)) L += (1 - (d / l.r) ** 2) * 1.4;
+        } else if (lvl.los(l.x, l.y, x, y)) L += Math.pow(1 - d / l.r, 1.1) * 1.3;
       }
       for (const g of this.guards) {
         if (!g.flashlight || !g.functional || g.possessed) continue;
@@ -492,10 +513,12 @@
 
     findInteraction() {
       const a = this.controlled, p = this.player;
+      // the target first, then whoever is closest
+      const byPriority = [...this.guards].sort((x, y) => (y.isTarget ? 1 : 0) - (x.isTarget ? 1 : 0) || Math.abs(x.cx - a.cx) - Math.abs(y.cx - a.cx));
       if (a === p) {
         if (p.locker) return { label: 'Leave locker', act: () => this.leaveLocker() };
         // takedown
-        for (const g of this.guards) {
+        for (const g of byPriority) {
           if (!g.functional || g.possessed) continue;
           if (Math.abs(g.cx - p.cx) > 40 || Math.abs(g.cy - p.cy) > 30 || p.climbing) continue;
           const behind = g.dir === Math.sign(g.cx - p.cx) || g.state === 'dazed';
@@ -513,7 +536,7 @@
       }
       if (a.kind !== 'critter' || true) {
         if (a !== p && a.kind === 'guard') {
-          for (const g of this.guards) {
+          for (const g of byPriority) {
             if (g === a || !g.functional) continue;
             if (Math.abs(g.cx - a.cx) < 42 && Math.abs(g.cy - a.cy) < 30)
               return { label: g.isTarget ? 'Take down ' + g.name : 'Knock out', act: () => this.hostTakedown(g), danger: g.isTarget };
@@ -887,7 +910,33 @@
 
     allActors() { return [this.player, ...this.guards, ...this.critters]; }
 
+    tripLaser(l, x) {
+      l.cool = 4;
+      LO.Sfx.play('alarm');
+      LO.Input.rumble(0.4, 0.4, 250);
+      this.say('LASER TRIPWIRE', 2);
+      if (this.alarmCool <= 0) { this.stats.alarms++; this.alarmCool = 10; }
+      for (const g of this.guards) {
+        if (!g.functional || g.possessed || g.state === 'alert' || g.state === 'flee') continue;
+        if (LO.dist(g.cx, g.cy, x, l.y) > 16 * TS) continue;
+        g.lastSeenX = x; g.susp = Math.max(g.susp, 0.8); g.wary = 1;
+        g.setInvestigate(x, true, LO.pick(['The lasers!', 'Someone tripped the wire!', 'Intruder in the beams!']));
+      }
+    }
+
+    lasersOn() { return !this.fuses.some((f) => f.state === 'tripped'); }
+
     updateHazards(dt) {
+      for (const l of this.lamps) if (l.spot) l.ang = l.spot.base + Math.sin(this.time * l.spot.speed + l.spot.phase) * l.spot.swing;
+      // laser tripwires: staff badges (a uniform) don't trip them, and nothing does when the power is out
+      if (this.lasers.length) {
+        const on = this.lasersOn(), p = this.player;
+        for (const l of this.lasers) {
+          l.cool -= dt;
+          if (!on || l.cool > 0 || p.disguised || p.hidden) continue;
+          if (p.x < l.x1 && p.x + p.w > l.x0 && p.y < l.y + 1 && p.bottom > l.y - 1) this.tripLaser(l, p.cx);
+        }
+      }
       // crates
       for (const c of this.crates) {
         if (c.state !== 'falling') continue;
@@ -1099,6 +1148,14 @@
       for (const l of this.lamps) {
         ctx.strokeStyle = '#1a1c22'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(l.x, l.ceil); ctx.lineTo(l.x, l.y - 5); ctx.stroke();
+        if (l.spot) {
+          ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(l.ang - Math.PI / 2);
+          ctx.fillStyle = '#353a46'; ctx.fillRect(-8, -9, 16, 14);
+          ctx.fillStyle = '#4a5060'; ctx.fillRect(-10, 3, 20, 4);
+          ctx.fillStyle = l.broken ? '#555' : l.on ? '#f4f8ff' : '#5a6070'; ctx.fillRect(-7, 6, 14, 3);
+          ctx.restore();
+          continue;
+        }
         ctx.fillStyle = l.circuit ? '#3e4a3a' : '#40444f';
         ctx.beginPath(); ctx.moveTo(l.x - 9, l.y + 1); ctx.lineTo(l.x - 4, l.y - 6); ctx.lineTo(l.x + 4, l.y - 6); ctx.lineTo(l.x + 9, l.y + 1); ctx.closePath(); ctx.fill();
         if (l.broken) { ctx.fillStyle = '#555'; ctx.fillRect(l.x - 3, l.y + 1, 2, 3); ctx.fillRect(l.x + 1, l.y + 1, 2, 2); }
@@ -1176,11 +1233,14 @@
       L.translate(ox, oy);
       const inView = (x, y, r) => x + r > this.cam.x && x - r < this.cam.x + LO.VIEW_W && y + r > this.cam.y && y - r < this.cam.y + LO.VIEW_H;
       const polyPath = (c, pts) => { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath(); };
+      const wedge = (c, l) => { c.beginPath(); c.moveTo(l.x, l.y); c.arc(l.x, l.y, l.r, l.ang - l.spot.half, l.ang + l.spot.half); c.closePath(); };
       for (const l of this.lamps) {
         if (!l.on || !inView(l.x, l.y, l.r)) continue;
         L.save(); polyPath(L, l.poly); L.clip();
+        if (l.spot) { wedge(L, l); L.clip(); }
         const g = L.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
-        g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.45, 'rgba(0,0,0,0.8)'); g.addColorStop(0.8, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        if (l.spot) { g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.6, 'rgba(0,0,0,0.85)'); g.addColorStop(0.9, 'rgba(0,0,0,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
+        else { g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.45, 'rgba(0,0,0,0.8)'); g.addColorStop(0.8, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
         L.fillStyle = g; L.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
         L.restore();
       }
@@ -1216,8 +1276,9 @@
       for (const l of this.lamps) {
         if (!l.on || !inView(l.x, l.y, l.r)) continue;
         ctx.save(); polyPath(ctx, l.poly); ctx.clip();
+        if (l.spot) { wedge(ctx, l); ctx.clip(); }
         const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
-        const col = l.circuit ? '190,220,255' : '255,200,120';
+        const col = l.spot ? '225,238,255' : l.circuit ? '190,220,255' : '255,200,120';
         g.addColorStop(0, `rgba(${col},0.22)`); g.addColorStop(1, `rgba(${col},0)`);
         ctx.fillStyle = g; ctx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
         ctx.restore();
@@ -1244,6 +1305,20 @@
         gr.addColorStop(0, `rgba(${col},${alertish ? 0.16 : 0.09})`); gr.addColorStop(1, `rgba(${col},0)`);
         ctx.fillStyle = gr; ctx.fill();
         ctx.restore();
+      }
+      // laser tripwires
+      const lon = this.lasersOn();
+      for (const l of this.lasers) {
+        ctx.fillStyle = '#2b2f38';
+        ctx.fillRect(l.x0, l.y - 6, 4, 12); ctx.fillRect(l.x1 - 4, l.y - 6, 4, 12);
+        ctx.fillStyle = lon ? '#ff3b3b' : '#401818';
+        ctx.fillRect(l.x0 + 1, l.y - 1, 2, 2); ctx.fillRect(l.x1 - 3, l.y - 1, 2, 2);
+        if (!lon) continue;
+        const flick = 0.75 + Math.sin(t * 30 + l.x0) * 0.15 + (l.cool > 0 ? 0.25 : 0);
+        ctx.strokeStyle = `rgba(255,50,50,${0.18 * flick})`; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.moveTo(l.x0 + 4, l.y); ctx.lineTo(l.x1 - 4, l.y); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,90,90,${flick})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(l.x0 + 4, l.y); ctx.lineTo(l.x1 - 4, l.y); ctx.stroke();
       }
       // goggles glint so you can find yourself in the dark
       const p = this.player;

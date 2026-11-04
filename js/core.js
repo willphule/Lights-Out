@@ -237,6 +237,7 @@ window.LO = window.LO || {};
         case 'hide': this.noise(0.15, 0.15, 700); break;
         case 'click': this.tone(600, 0.04, 'square', 0.06); break;
         case 'deny': this.tone(180, 0.15, 'square', 0.1); break;
+        case 'alarm': [0, 0.22, 0.44].forEach((d) => { this.tone(980, 0.16, 'square', 0.12, -300, d); }); break;
         case 'disguise': this.noise(0.3, 0.12, 1000); this.tone(330, 0.2, 'triangle', 0.08, 110); break;
       }
     },

@@ -64,6 +64,8 @@ Controllers that support it vibrate on takedowns, crashes, power surges and gett
 - **Noise** appears as rings. Walking is audible up close, running carries far, and crouch-walking is silent. Broken lamps, bottles and pellet ricochets all draw guards to investigate.
 - **Bodies** left in the light get found, which costs you points and puts guards on edge.
 - In **disguise**, guards ignore you unless you do something suspicious in front of them (run, shoot, throw, climb out of a vent, take someone down) or hang around close to them in the light.
+- **Searchlights** sweep back and forth and light up whatever they cross, just like a lamp. Shoot them out or cut their power.
+- **Laser tripwires** sit at chest height. Touching one sounds an alarm and draws every guard nearby. Crouch under them. A uniform's staff badge doesn't trip them, and they shut off while a fuse box is tripped.
 - **Possession** drains your WILL bar. Your own body stays behind in a trance, so leave it somewhere dark.
 
 ## Missions
@@ -71,6 +73,8 @@ Controllers that support it vibrate on takedowns, crashes, power surges and gett
 1. **Night Shift**: Foreman Grell's foundry. Teaches the basics and has four approaches.
 2. **Low Water**: Overseer Vask's pumping station. Puddles, a fuse box, a gated hall and rats.
 3. **The Gala**: Baroness Vell's ballroom. Flashlight guards, a chandelier and a staff-only door.
+4. **Debtors' Yard**: Warden Okka's prison yard. Sweeping searchlights, rain puddles, a gantry crane and five cells to open.
+5. **Lights Out**: Chairman Morrow's power station, the finale. Laser tripwires (crouch under them, wear a uniform, or kill the power), a master breaker that blacks out the station, and a bodyguard who never leaves Morrow's side.
 
 ## Scoring
 
