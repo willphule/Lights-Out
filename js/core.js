@@ -151,6 +151,7 @@ window.LO = window.LO || {};
         down: this.isDown('KeyS', 'ArrowDown', 'ControlLeft') || s.y > 0.5 || this.padIsDown(13),
         upPressed: this.wasPressed('KeyW', 'ArrowUp'),
         jump: this.wasPressed('Space') || this.padWasPressed(0),
+        jumpHeld: this.isDown('Space', 'KeyW', 'ArrowUp') || this.padIsDown(0),
         run: this.isDown('ShiftLeft', 'ShiftRight') || this.padIsDown(4, 10),
       };
     },

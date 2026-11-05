@@ -423,6 +423,25 @@
       }
     }
 
+    // off-screen arrows: where the target is, and who is onto you
+    for (const gd of g.guards) {
+      if (!gd.functional || gd.possessed) continue;
+      const alertish = gd.state === 'alert' || gd.state === 'flee';
+      if (!gd.isTarget && !alertish && gd.susp < 0.3) continue;
+      const sx = gd.cx - g.cam.x, sy = gd.cy - g.cam.y;
+      if (sx > 10 && sx < W - 10 && sy > 10 && sy < H - 10) continue;
+      const cx = LO.clamp(sx, 28, W - 28), cy = LO.clamp(sy, 100, H - 70);
+      const a = Math.atan2(sy - cy, sx - cx);
+      const col = alertish ? '#ff4a3a' : gd.isTarget ? '#ffd166' : '#ffaa3c';
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+      ctx.globalAlpha = alertish ? 0.7 + Math.sin(g.time * 10) * 0.3 : 0.85;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-7, -9); ctx.lineTo(-7, 9); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-5, -7); ctx.lineTo(-5, 7); ctx.fill();
+      ctx.restore();
+      if (gd.isTarget) { ctx.font = LO.F.d(13); ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.fillText('TARGET', cx - Math.cos(a) * 20, cy - Math.sin(a) * 20 + 4); }
+    }
+    ctx.globalAlpha = 1;
+
     if (g.controlled !== p) {
       ctx.font = LO.F.d(19); ctx.fillStyle = '#c9a0ff';
       const who = g.controlled.kind === 'critter' ? 'a rat' : g.controlled.name.toLowerCase();

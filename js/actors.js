@@ -90,6 +90,9 @@
       }
     }
 
+    // let go of jump early for a shorter hop
+    if (a.jumping && !inp.jumpHeld && a.vy < -120) { a.vy *= 0.5; a.jumping = false; }
+    if (a.onGround || a.vy >= 0) a.jumping = false;
     if (!a.climbing) {
       let sp = o.speed;
       if (a.crouch) sp = o.crouchSpeed;
@@ -99,7 +102,7 @@
       if (move) a.dir = move;
       if (a.jumpBuf > 0 && a.coyote > 0) {
         if (inp.down && onOneWay(lvl, a)) { a.dropT = 0.25; a.y += 1; }
-        else if (!a.crouch) { a.vy = -o.jumpV; LO.Sfx.play('jump'); }
+        else if (!a.crouch) { a.vy = -o.jumpV; a.jumping = true; LO.Sfx.play('jump'); }
         a.jumpBuf = 0; a.coyote = 0;
       }
       if (a.onGround) a.anim += Math.abs(a.vx) * dt * 0.06;

@@ -7,6 +7,12 @@ A 2D stealth platformer where each level is a small sandbox with many solutions.
 - **Possess a guard or a rat for a few seconds.** Walk a guard through a security door or have them knock out their own boss. Squeeze a rat between gate bars and through grates. Free the caged workers on the way.
 - **You're ranked at the end of each level** (S to D), with badges and a list of approaches you've found, so replays pay off.
 
+## Look and sound
+
+Each mission has its own palette, wall textures, props and weather: a foundry glowing through sooty windows, a tiled pump station dripping in cold light, a gala in wine-red wallpaper under arched moonlit windows, a prison yard in the rain under a city skyline, and a power station whose city lights go dark when you trip the master breaker. Lamps are shaded cones with soft pools, visible beams and drifting dust, and the light you see is the light guards use.
+
+The music is a noir score synthesized live in the browser. It stays calm while you're unseen, adds brushes and a heartbeat as guards grow suspicious, breaks into drums when you're spotted, and muffles while you hide. Each mission also has its own ambience. There are no audio or image files.
+
 ## Play
 
 There's no build step. Open `index.html` in a browser, or serve the folder:
@@ -88,6 +94,8 @@ You get 1,000 points for completing a mission, plus a bonus for how the target w
 | `js/level.js` | Tile map, collision, line of sight, light visibility polygons |
 | `js/actors.js` | Player, guards, target, rats, and shared movement and AI |
 | `js/game.js` | A running mission: perception, noise, interactions, possession, hazards, rendering, scoring |
+| `js/scenery.js` | Mission themes: wall textures, props, windows, sky and skyline, weather, dust, vignette |
+| `js/music.js` | Adaptive music, ambience and stingers (Web Audio) |
 | `js/render.js` | Character drawing and the HUD |
 | `js/levels.js` | Mission data, with the map legend at the top |
 | `js/main.js` | Menus, briefing, results, save data, main loop |

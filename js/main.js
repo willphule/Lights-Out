@@ -33,9 +33,10 @@
   };
   LO.App = App;
 
-  function startLevel(i) {
+  function startLevel(i, intro) {
     App.levelIndex = i;
     App.game = new LO.Game(LO.LEVELS[i], i);
+    if (intro) App.game.intro = { t: 0, dur: 3.6 };
     App.screen = 'play';
     App.showHelp = false;
     LO.Music.setMode('level', LO.LEVELS[i].theme);
@@ -259,7 +260,7 @@
     backdrop(ctx, App.t, 0.55);
     heading(ctx, 'CASE FILES', 80, 72, 46);
     ctx.font = F.t(14); ctx.fillStyle = '#b8ae98'; ctx.textAlign = 'left';
-    ctx.fillText('Five names. Five ways in for each. Choose a file.', 300, 68);
+    ctx.fillText('Five names. Four ways in for each. Choose a file.', 300, 68);
     App.buttons = [];
     LO.LEVELS.forEach((lv, i) => {
       const y = 98 + i * 76, x = 80, w = 640, h = 66;
@@ -352,7 +353,7 @@
     button(ctx, 'back', 'BACK', px + pw - 340, py + ph - 52, 100, 40, { style: 'paper', size: 22 });
     App.sel = App.sel === undefined ? 0 : App.sel;
     const c = menuInput();
-    if (c === 'go') startLevel(App.levelIndex);
+    if (c === 'go') startLevel(App.levelIndex, true);
     if (c === 'back' || LO.Input.action('back')) { App.screen = 'select'; App.sel = App.levelIndex; }
   }
 
@@ -540,7 +541,7 @@
         g.update(dt);
         g.render(ctx);
         if (g.state === 'failed') drawFailed(ctx);
-        if (g.state === 'won') { App.resultsT = 0; finishLevel(); }
+        if (g.state === 'won' && g.winT > 1.4) { App.resultsT = 0; finishLevel(); }
         break;
       }
     }

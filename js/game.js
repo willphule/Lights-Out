@@ -55,6 +55,8 @@
       this.hitStop = 0; this.slowT = 0; this.slowK = 1;
       this.mood = { alert: 0, watched: 0, possess: 0, hidden: 0 };
       this.say(def.intro || '');
+      this.intro = null;
+      this.winT = 0;
     }
 
     // ------------------------------------------------------------ setup
@@ -688,7 +690,22 @@
     update(dt) {
       const I = LO.Input;
       if (this.state === 'failed') { this.failT += dt; this.updateFx(dt); LO.Scenery.update(this, dt); return; }
+      if (this.state === 'won') { this.winT += dt; this.updateFx(dt); return; }
       if (this.state !== 'play') return;
+      // opening shot: the camera finds the target, then comes back to you
+      if (this.intro) {
+        const it = this.intro;
+        it.t += dt;
+        if (it.t > 0.4 && I.anyPressed()) it.t = Math.max(it.t, it.dur - 0.5);
+        const tg = this.target;
+        const focus = it.t < 1.7 ? tg : this.player;
+        const k = Math.min(1, dt * (it.t < 1.7 ? 3 : 2.5));
+        this.cam.x = this.clampCamX(LO.lerp(this.cam.x, focus.cx - LO.VIEW_W / 2, k));
+        this.cam.y = this.clampCamY(LO.lerp(this.cam.y, focus.cy - LO.VIEW_H / 2, k));
+        this.updateLamps(dt); LO.Scenery.update(this, dt); this.updateFx(dt);
+        if (it.t >= it.dur) this.intro = null;
+        return;
+      }
       // impact freeze and slow motion for the big moments
       if (this.hitStop > 0) { this.hitStop -= dt; this.shake = Math.max(this.shake, 2); return; }
       this.realDt = dt;
@@ -1065,7 +1082,38 @@
       ctx.restore();
       if (this.lightning > 0) { ctx.fillStyle = `rgba(200,210,255,${this.lightning * 0.1})`; ctx.fillRect(0, 0, LO.VIEW_W, LO.VIEW_H); }
       LO.Scenery.drawVignette(ctx, this);
-      LO.drawHUD(ctx, this);
+      if (this.intro) this.drawIntro(ctx);
+      else LO.drawHUD(ctx, this);
+      if (this.state === 'won') {
+        const k = Math.min(1, this.winT / 0.9);
+        ctx.fillStyle = `rgba(3,4,9,${k})`; ctx.fillRect(0, 0, LO.VIEW_W, LO.VIEW_H);
+        ctx.globalAlpha = Math.min(1, this.winT * 2); ctx.textAlign = 'center';
+        ctx.font = LO.F.d(64); ctx.fillStyle = '#f2e8d2'; ctx.fillText('MISSION COMPLETE', LO.VIEW_W / 2, LO.VIEW_H / 2);
+        ctx.font = LO.F.t(16); ctx.fillStyle = '#b8ae98'; ctx.fillText('You slip out into the night.', LO.VIEW_W / 2, LO.VIEW_H / 2 + 34);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Letterbox bars and the mission title while the camera shows the target.
+    drawIntro(ctx) {
+      const it = this.intro, W = LO.VIEW_W, H = LO.VIEW_H;
+      const out = Math.max(0, (it.t - (it.dur - 0.6)) / 0.6), inn = Math.min(1, it.t / 0.3);
+      const bar = 62 * inn * (1 - out);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+      ctx.globalAlpha = Math.min(1, it.t * 2) * (1 - out);
+      ctx.textAlign = 'left';
+      ctx.font = LO.F.m(11); ctx.fillStyle = '#b8ae98';
+      ctx.fillText(`CASE FILE No. ${this.index + 1}  ·  ${this.def.place.toUpperCase()}`, 40, H - 132);
+      ctx.font = LO.F.d(58); ctx.fillStyle = '#f2e8d2'; ctx.fillText(this.def.name.toUpperCase(), 38, H - 70);
+      if (it.t < 1.9 && this.target) {
+        const tg = this.target, sx = tg.cx - this.cam.x, sy = tg.y - this.cam.y;
+        ctx.textAlign = 'center';
+        ctx.font = LO.F.d(22); ctx.fillStyle = '#ff7a5c'; ctx.fillText('TARGET', sx, sy - 44);
+        ctx.font = LO.F.t(15); ctx.fillStyle = '#f2e8d2'; ctx.fillText(tg.name, sx, sy - 24);
+      }
+      ctx.textAlign = 'right'; ctx.font = LO.F.m(10); ctx.fillStyle = 'rgba(200,190,170,0.6)';
+      ctx.fillText('ANY KEY TO SKIP', W - 30, H - 24);
+      ctx.globalAlpha = 1;
     }
 
     drawDynamicTiles(ctx) {
@@ -1512,7 +1560,7 @@
       }
       ctx.globalAlpha = 1;
       // aim reticle
-      if (this.controlled === p && this.state === 'play') {
+      if (this.controlled === p && this.state === 'play' && !this.intro) {
         const m = this.aimWorld();
         if (this.aimSnap) {
           ctx.strokeStyle = 'rgba(255,233,168,0.55)'; ctx.lineWidth = 1.5;
