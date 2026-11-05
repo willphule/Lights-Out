@@ -208,6 +208,7 @@
           const inCone = fwd > 0 && Math.abs(Math.atan2(dy, fwd)) < half;
           if ((inCone || d < 30) && this.level.los(ex, ey, sx, sy)) { seen = true; dmin = Math.min(dmin, d); }
         }
+        gd.eyesOn = 0;
         if (seen) {
           vis = this.playerLight;
           if (p.crouch) vis *= 0.7;
@@ -224,6 +225,7 @@
       }
       gd.seesPlayer = seen;
       gd.vis = vis;
+      gd.eyesOn = dmin < Infinity ? dmin : 0;
       if (seen) {
         gd.lastSeenX = p.cx; gd.lastSeenY = p.cy;
         if (!alertish) {
@@ -293,7 +295,7 @@
 
     blowCover(gd) {
       const p = this.player;
-      p.disguised = false;
+      p.disguised = false; p.uniformFrom = null;
       this.stats.coverBlown++;
       this.float(p.cx, p.y - 24, 'COVER BLOWN', '#ff5c5c');
       gd.say('You\'re not one of us!');
@@ -346,7 +348,38 @@
       LO.Sfx.play('thud'); LO.Input.rumble(0.5, 0.3, 140);
       this.noise(a.cx, a.cy, 2.2 * TS, 'thud');
       if (a.isTarget) this.neutralize(method);
-      else this.stats.kos++;
+      else { this.stats.kos++; a.wakeT = a.wakeMax = this.def.koTime || LO.rand(50, 65); }
+    }
+
+    wakeUp(g) {
+      const b = g.bottom;
+      g.ko = false; g.lying = false; g.fallT = undefined;
+      g.h = 46; g.y = b - 46; g.vx = 0;
+      g.state = 'search'; g.t = 7; g.lookT = 0.8;
+      g.susp = 0.6; g.wary = 1;
+      g.say(g.stripped ? 'Hey! Who took my uniform?!' : 'Ugh... who hit me?!', 2.6);
+      if (!g.found) this.stats.bodiesFound++; // they report the attack
+      g.found = false;
+      this.float(g.cx, g.y - 24, 'Guard woke up', '#ffaa3c');
+      LO.Sfx.play('huh');
+      for (const o of this.guards) {
+        if (o === g || !o.functional || o.possessed || LO.dist(o.cx, o.cy, g.cx, g.cy) > 12 * TS) continue;
+        o.wary = 1; o.setInvestigate(g.cx, true, '!?');
+      }
+      const p = this.player;
+      if (p.disguised && p.uniformFrom === g) this.loseDisguise('The guard you took that uniform from is awake. Your cover is gone.');
+    }
+
+    // The uniform runs out, or its owner comes round. Blown if someone's looking.
+    loseDisguise(msg) {
+      const p = this.player;
+      if (!p.disguised) return;
+      const watcher = this.guards.find((g) => g.functional && !g.possessed && g.eyesOn && g.eyesOn < 6 * TS && this.playerLight > 0.12);
+      if (watcher) { this.blowCover(watcher); return; }
+      p.disguised = false; p.uniformFrom = null;
+      this.float(p.cx, p.y - 24, 'Uniform ditched', '#8fd3ff');
+      this.say(msg, 3.5);
+      LO.Sfx.play('disguise');
     }
 
     kill(a, method, cause) {
@@ -538,9 +571,11 @@
     takeUniform(g) {
       g.stripped = true;
       this.player.disguised = true;
+      this.player.cover = this.player.coverMax = this.def.coverTime || 15;
+      this.player.uniformFrom = g;
       LO.Sfx.play('disguise');
       this.float(this.player.cx, this.player.y - 24, 'DISGUISED', '#8fd3ff');
-      this.say('Disguised. Guards ignore you unless you act suspicious or linger close in the light.', 4);
+      this.say('Disguised, but only for a short while. Guards looking at you up close wear your cover down faster.', 4);
     }
 
     freeWorker(c) {
@@ -707,7 +742,13 @@
         return;
       }
       // impact freeze and slow motion for the big moments
-      if (this.hitStop > 0) { this.hitStop -= dt; this.shake = Math.max(this.shake, 2); return; }
+      if (this.hitStop > 0) {
+        this.hitStop -= dt; this.shake = Math.max(this.shake, 2);
+        // don't swallow presses made during the freeze
+        if (I.action('interact')) this.queuedInteract = true;
+        if (I.action('possess')) this.queuedPossess = true;
+        return;
+      }
       this.realDt = dt;
       if (this.slowT > 0) { this.slowT -= dt; dt *= this.slowK; }
       this.time += dt;
@@ -757,10 +798,12 @@
         if (I.action('shoot')) this.float(h.cx, h.y - 16, 'Can\'t shoot while possessing', '#aaa', 1);
       }
       if (this.controlled === p) this.energy = Math.min(this.maxEnergy, this.energy + dt * 0.6);
-      if (I.action('possess')) { if (this.controlled !== p) this.release(); else this.tryPossess(); }
+      if (I.action('possess') || this.queuedPossess) { if (this.controlled !== p) this.release(); else this.tryPossess(); }
+      this.queuedPossess = false;
 
       // interactions
       const inter = this.findInteraction();
+      const queued = this.queuedInteract; this.queuedInteract = false;
       this.interaction = inter;
       if (inter && !inter.disabled) {
         if (inter.hold) {
@@ -770,7 +813,7 @@
             p.suspiciousT = Math.max(p.suspiciousT, 0.3);
             if (this.holdT >= inter.hold) { inter.act(); this.holdT = 0; this.holdKey = null; }
           } else { this.holdT = 0; this.holdKey = null; }
-        } else if (I.action('interact')) inter.act();
+        } else if (I.action('interact') || queued) inter.act();
       } else { this.holdT = 0; this.holdKey = null; if (inter && I.action('interact')) LO.Sfx.play('deny'); }
 
       // light on the player
@@ -778,6 +821,17 @@
 
       // AI
       for (const g of this.guards) g.update(dt, this);
+      for (const g of this.guards) {
+        if (!g.ko || g.isTarget || g.wakeT === undefined) continue;
+        g.wakeT -= dt;
+        if (g.wakeT <= 0) this.wakeUp(g);
+      }
+      if (p.disguised) {
+        const scrutiny = this.guards.some((g) => g.functional && !g.possessed && g.eyesOn && g.eyesOn < 4 * TS);
+        p.scrutiny = scrutiny;
+        p.cover -= dt * (scrutiny ? 2.5 : 1);
+        if (p.cover <= 0) this.loseDisguise('That uniform won\'t fool anyone now. You ditch it.');
+      }
       for (const c of this.critters) c.update(dt, this);
       for (const l of this.lockers) {
         if (!l.compromised || p.locker !== l) continue;

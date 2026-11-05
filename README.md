@@ -68,13 +68,16 @@ Controllers that support it vibrate on takedowns, crashes, power surges and gett
 - The **visibility meter** shows how much light is on you. Crouching makes you harder to spot. Inside vents and lockers you can't be seen at all.
 - Guards see in a **cone** in front of them, drawn on screen. It turns orange when they're suspicious and red when they've spotted you. A spotted player has about a second to break line of sight before the guard fires.
 - **Noise** appears as rings. Walking is audible up close, running carries far, and crouch-walking is silent. Broken lamps, bottles and pellet ricochets all draw guards to investigate.
-- **Bodies** left in the light get found, which costs you points and puts guards on edge.
-- In **disguise**, guards ignore you unless you do something suspicious in front of them (run, shoot, throw, climb out of a vent, take someone down) or hang around close to them in the light.
+- **Bodies** left in the light get found, which costs you points and puts guards on edge. Knocked-out guards also **wake up** after about a minute (a ring above them shows how long). They report the attack and the guards nearby start searching.
+- A **uniform** only holds up for about 15 seconds, shown as a bar in the HUD. It wears down faster while a guard is looking at you up close. When it runs out you ditch it, unless someone is watching, in which case your cover is blown. Doing something suspicious in front of a guard (running, shooting, throwing, climbing out of a vent, taking someone down) blows it at once, and so does the uniform's owner waking up.
 - **Searchlights** sweep back and forth and light up whatever they cross, just like a lamp. Shoot them out or cut their power.
 - **Laser tripwires** sit at chest height. Touching one sounds an alarm and draws every guard nearby. Crouch under them. A uniform's staff badge doesn't trip them, and they shut off while a fuse box is tripped.
 - **Possession** drains your WILL bar. Your own body stays behind in a trance, so leave it somewhere dark.
 
 ## Missions
+
+Each mission has two halves: a new wing where you start and finish, and the target's side, joined by doorways, vents and catwalks.
+
 
 1. **Night Shift**: Foreman Grell's foundry. Teaches the basics and has four approaches.
 2. **Low Water**: Overseer Vask's pumping station. Puddles, a fuse box, a gated hall and rats.

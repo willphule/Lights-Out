@@ -189,12 +189,26 @@
       const look = g.look || {};
       const body = g.isTarget ? (look.gown || look.coat || '#7a2c3a') : g.stripped ? '#5f5f5f' : (look.body || '#2c4a7a');
       const d = g.dir || 1;
-      ctx.save(); if (d < 0) { ctx.translate(g.cx * 2, 0); ctx.scale(-1, 1); }
+      const stir = g.ko && g.wakeT !== undefined && g.wakeT < 6 ? Math.sin(t * 22) * (6 - g.wakeT) * 0.25 : 0;
+      ctx.save(); ctx.translate(0, -Math.abs(stir)); if (d < 0) { ctx.translate(g.cx * 2, 0); ctx.scale(-1, 1); }
       P(look.dark || '#1d2f50'); ctx.fillRect(g.cx - 22, fy - 7, 16, 6);
       P(body); ctx.fillRect(g.cx - 8, fy - 10, 22, 9);
       P('#c9a27e'); ctx.beginPath(); ctx.arc(g.cx + 19, fy - 6, 5.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-      if (!flat && g.ko) { ctx.fillStyle = '#ffe9a8'; ctx.font = LO.F.d(11); ctx.textAlign = 'center'; ctx.fillText('z', g.cx + d * 22 + Math.sin(t * 2) * 2, fy - 16 - (t * 8) % 8); }
+      if (!flat && g.ko) {
+        const waking = g.wakeT !== undefined && g.wakeT < 6;
+        ctx.textAlign = 'center';
+        if (waking) { ctx.fillStyle = '#ffaa3c'; ctx.font = LO.F.d(16); ctx.fillText('!?', g.cx + d * 18, fy - 18 + Math.sin(t * 12) * 2); }
+        else { ctx.fillStyle = '#ffe9a8'; ctx.font = LO.F.d(11); ctx.fillText('z', g.cx + d * 22 + Math.sin(t * 2) * 2, fy - 16 - (t * 8) % 8); }
+        if (g.wakeT !== undefined && g.wakeMax) {
+          // how long until they come round
+          const k = Math.max(0, g.wakeT / g.wakeMax);
+          ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+          ctx.beginPath(); ctx.arc(g.cx + d * 18, fy - 6, 5, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = waking ? '#ffaa3c' : 'rgba(255,233,168,0.8)';
+          ctx.beginPath(); ctx.arc(g.cx + d * 18, fy - 6, 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
+        }
+      }
       return;
     }
     const x = g.cx, y = g.y;
@@ -339,8 +353,13 @@
     bottleIcon(ctx, 132, 63); ctx.fillText(String(g.bottles), 142, 68);
     ctx.font = LO.F.m(9); ctx.fillStyle = 'rgba(200,180,255,0.6)'; ctx.fillText('WILL', 162, 67);
     if (p.disguised) {
-      ctx.fillStyle = '#2c4a7a'; ctx.fillRect(92, 76, 12, 4); ctx.fillRect(96, 74, 10, 2);
-      ctx.font = LO.F.d(15); ctx.fillStyle = '#8fd3ff'; ctx.fillText('IN GUARD UNIFORM', 110, 82);
+      const k = Math.max(0, p.cover / p.coverMax);
+      const low = k < 0.3;
+      ctx.fillStyle = '#2c4a7a'; ctx.fillRect(92, 79, 12, 4); ctx.fillRect(96, 77, 10, 2);
+      ctx.font = LO.F.d(15); ctx.fillStyle = low ? '#ffaa3c' : '#8fd3ff';
+      ctx.fillText(p.scrutiny ? 'UNIFORM · UNDER SCRUTINY' : 'UNIFORM', 110, 84);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(92, 89, 130, 5);
+      ctx.fillStyle = low && Math.sin(g.time * 12) > 0 ? '#ffaa3c' : '#5fa8e0'; ctx.fillRect(92, 89, 130 * k, 5);
     }
 
     // objective
